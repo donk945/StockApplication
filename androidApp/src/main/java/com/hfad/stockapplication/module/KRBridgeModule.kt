@@ -11,6 +11,8 @@ import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
 import com.hfad.stockapplication.KRApplication
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -101,6 +103,38 @@ class KRBridgeModule : KuiklyRenderBaseModule() {
         val paramJSON = JSONObject(params)
         val content = paramJSON.optString("content")
         Log.i("KuiklyRender", content)
+        if (content.contains("\"sessionId\":\"33e722\"")) {
+            ingestAgentDebug(content)
+        }
+    }
+
+    private fun ingestAgentDebug(body: String) {
+        // #region agent log
+        Thread {
+            val payload = body.toByteArray(Charsets.UTF_8)
+            val endpoints = listOf(
+                "http://127.0.0.1:7803/ingest/557ad929-3442-4ddd-b189-c1033d755676",
+                "http://10.0.2.2:7803/ingest/557ad929-3442-4ddd-b189-c1033d755676",
+                "http://192.168.1.3:7803/ingest/557ad929-3442-4ddd-b189-c1033d755676",
+            )
+            for (endpoint in endpoints) {
+                try {
+                    val conn = URL(endpoint).openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.doOutput = true
+                    conn.connectTimeout = 800
+                    conn.readTimeout = 800
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.setRequestProperty("X-Debug-Session-Id", "33e722")
+                    conn.outputStream.use { it.write(payload) }
+                    conn.inputStream.close()
+                    conn.disconnect()
+                    break
+                } catch (_: Exception) {
+                }
+            }
+        }.start()
+        // #endregion
     }
 
     private fun toast(params: String?) {
@@ -189,4 +223,24 @@ class KRBridgeModule : KuiklyRenderBaseModule() {
     companion object {
         const val MODULE_NAME = "HRBridgeModule"
     }
+}
+
+private fun JSONObject.toMap(): Map<Any, Any> {
+    val map = mutableMapOf<Any, Any>()
+    val keys = keys()
+    while (keys.hasNext()) {
+        val key = keys.next()
+        when (val v = opt(key)) {
+            is JSONObject -> {
+                map[key] = v.toMap()
+            }
+
+            else -> {
+                v?.also {
+                    map[key] = it
+                }
+            }
+        }
+    }
+    return map
 }
