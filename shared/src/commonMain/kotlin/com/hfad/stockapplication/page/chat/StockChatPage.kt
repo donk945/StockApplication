@@ -15,7 +15,6 @@ import com.hfad.stockapplication.data.chat.LocalChatRepository
 import com.hfad.stockapplication.data.chat.RelatedStockParser
 import com.hfad.stockapplication.data.chat.TencentMarketRepository
 import com.hfad.stockapplication.data.chat.UserSettingsRepository
-import com.hfad.stockapplication.debug.AgentDebugLog
 import com.hfad.stockapplication.infra.BaseComposePager
 import com.hfad.stockapplication.infra.SseModule
 import com.hfad.stockapplication.infra.bridgeModule
@@ -75,9 +74,6 @@ internal class StockChatPage : BaseComposePager() {
             builtinApiKey = apiKey,
         )
         store.loadInitial(systemNight = isNightMode())
-        // #region agent log
-        AgentDebugLog.sink = { json -> bridgeModule.log(json) }
-        // #endregion
         if (!store.apiKeyReady) {
             bridgeModule.toast("未配置 API Key，可在设置里填写")
         }
@@ -104,23 +100,6 @@ internal class StockChatPage : BaseComposePager() {
         val bottomInset = systemBottomInset()
 
         ProvideChatColors(dark = store.darkTheme) {
-            // #region agent log
-            LaunchedEffect(store.messagesEmpty, store.isSending, keyboardHeight) {
-                AgentDebugLog.emit(
-                    "D",
-                    "StockChatPage.ChatScreen",
-                    "branch",
-                    mapOf(
-                        "empty" to store.messagesEmpty.toString(),
-                        "sending" to store.isSending.toString(),
-                        "kb" to keyboardHeight.toString(),
-                        "inset" to bottomInset.toString(),
-                        "pageH" to pagerData.pageViewHeight.toString(),
-                        "msgs" to store.messages.size.toString(),
-                    ),
-                )
-            }
-            // #endregion
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -224,55 +203,7 @@ internal class StockChatPage : BaseComposePager() {
                                 return@LaunchedEffect
                             }
                             listState.scrollToItem(lastUserRow, 0)
-                            // #region agent log
-                            AgentDebugLog.emit(
-                                "B",
-                                "StockChatPage.scroll",
-                                "scroll-pin",
-                                mapOf(
-                                    "userRow" to lastUserRow.toString(),
-                                    "idx" to listState.firstVisibleItemIndex.toString(),
-                                    "off" to listState.firstVisibleItemScrollOffset.toString(),
-                                    "canBack" to listState.canScrollBackward.toString(),
-                                    "sending" to store.isSending.toString(),
-                                    "rows" to chatRows.size.toString(),
-                                    "pinEpoch" to pinEpoch.toString(),
-                                    "kb" to keyboardHeight.toString(),
-                                    "inset" to bottomInset.toString(),
-                                    "pageH" to pagerData.pageViewHeight.toString(),
-                                    "sb" to pagerData.statusBarHeight.toString(),
-                                ),
-                            )
-                            // #endregion
                         }
-                        // #region agent log
-                        LaunchedEffect(
-                            keyboardHeight,
-                            store.isSending,
-                            chatRows.size,
-                            listState.firstVisibleItemIndex,
-                            listState.firstVisibleItemScrollOffset,
-                        ) {
-                            AgentDebugLog.emit(
-                                "C",
-                                "StockChatPage.list",
-                                "list-layout",
-                                mapOf(
-                                    "kb" to keyboardHeight.toString(),
-                                    "inset" to bottomInset.toString(),
-                                    "composerPad" to maxOf(bottomInset, keyboardHeight).toString(),
-                                    "empty" to "false",
-                                    "sending" to store.isSending.toString(),
-                                    "rows" to chatRows.size.toString(),
-                                    "userRow" to lastUserRow.toString(),
-                                    "idx" to listState.firstVisibleItemIndex.toString(),
-                                    "off" to listState.firstVisibleItemScrollOffset.toString(),
-                                    "canBack" to listState.canScrollBackward.toString(),
-                                    "pageH" to pagerData.pageViewHeight.toString(),
-                                ),
-                            )
-                        }
-                        // #endregion
                     }
                 ChatComposer(
                     draft = store.draft,
@@ -308,18 +239,6 @@ internal class StockChatPage : BaseComposePager() {
                     },
                     onClearChartAsk = { store.clearChartAsk() },
                     onSend = {
-                        // #region agent log
-                        AgentDebugLog.emit(
-                            "E",
-                            "StockChatPage.onSend",
-                            "send-tap",
-                            mapOf(
-                                "kb" to keyboardHeight.toString(),
-                                "empty" to store.messagesEmpty.toString(),
-                                "msgs" to store.messages.size.toString(),
-                            ),
-                        )
-                        // #endregion
                         sendDraft()
                     },
                     onStop = { store.stopSending() },

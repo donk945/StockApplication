@@ -17,14 +17,17 @@ Pods/*
 Pods-iosApp/*
 Kotlin-js-store
 
-# Local AI skill clones of KuiklyUI (very large, not app source)
-.claude/skills/**/references/
+# Local AI tooling (skills / IDE). Keep on disk, never publish.
+.claude/
+.trae/
 .cursor/
+.agents/
+.codebuddy/
+.run/
+skills-lock.json
 debug-*.log
 *.apk
 .kotlin/
-.codebuddy/
-.agents/
 
 ## Various settings
 *.pbxuser

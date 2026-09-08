@@ -25,7 +25,6 @@ import com.hfad.stockapplication.adapter.KRRouterAdapter
 import com.hfad.stockapplication.adapter.KRThreadAdapter
 import com.hfad.stockapplication.adapter.KRUncaughtExceptionHandlerAdapter
 import com.hfad.stockapplication.module.KRBridgeModule
-import com.hfad.stockapplication.module.KRShareModule
 import com.hfad.stockapplication.module.KRSseModule
 import org.json.JSONObject
 
@@ -88,9 +87,6 @@ class KuiklyRenderActivity : AppCompatActivity(), KuiklyRenderViewBaseDelegatorD
         with(kuiklyRenderExport) {
             moduleExport(KRBridgeModule.MODULE_NAME) {
                 KRBridgeModule()
-            }
-            moduleExport(KRShareModule.MODULE_NAME) {
-                KRShareModule()
             }
             moduleExport(KRSseModule.MODULE_NAME) {
                 KRSseModule()

@@ -1,6 +1,5 @@
 package com.hfad.stockapplication.h5
 
-import com.hfad.stockapplication.h5.components.KRMyView
 import com.hfad.stockapplication.h5.module.KRBridgeModule
 import com.hfad.stockapplication.h5.module.KRCacheModule
 import com.hfad.stockapplication.h5.module.KRRouterModule
@@ -76,10 +75,5 @@ class KuiklyWebRenderViewDelegator : KuiklyRenderViewDelegatorDelegate {
     override fun registerViewExternalPropHandler(kuiklyRenderExport: IKuiklyRenderExport) {
         super.registerViewExternalPropHandler(kuiklyRenderExport)
         kuiklyRenderExport.viewPropExternalHandlerExport(ViewPropExternalHandler())
-    }
-
-    override fun registerExternalRenderView(kuiklyRenderExport: IKuiklyRenderExport) {
-        super.registerExternalRenderView(kuiklyRenderExport)
-        kuiklyRenderExport.renderViewExport(KRMyView.VIEW_NAME) { KRMyView() }
     }
 }
