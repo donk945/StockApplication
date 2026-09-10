@@ -2,6 +2,9 @@
 #import "UINavigationController+FDFullscreenPopGesture.h"
 #import <OpenKuiklyIOSRender/KuiklyRenderViewControllerBaseDelegator.h>
 #import <OpenKuiklyIOSRender/KuiklyRenderContextProtocol.h>
+#if __has_include("DeepSeekAPIKey.h")
+#import "DeepSeekAPIKey.h"
+#endif
 
 #define HRWeakSelf __weak typeof(self) weakSelf = self;
 @interface KuiklyRenderViewController()<KuiklyRenderViewControllerBaseDelegatorDelegate>
@@ -67,6 +70,11 @@
     NSMutableDictionary *mParam = [(pageParam ?: @{}) mutableCopy];
     mParam[@"appId"] = @1;
     NSString *apiKey = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"DeepSeekAPIKey"];
+    if (![apiKey isKindOfClass:[NSString class]] || apiKey.length == 0) {
+#ifdef BUILTIN_DEEPSEEK_API_KEY
+        apiKey = BUILTIN_DEEPSEEK_API_KEY;
+#endif
+    }
     if ([apiKey isKindOfClass:[NSString class]] && apiKey.length > 0) {
         mParam[@"deepseekApiKey"] = apiKey;
     } else if (mParam[@"deepseekApiKey"] == nil) {

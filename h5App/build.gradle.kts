@@ -1,3 +1,4 @@
+import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -5,6 +6,14 @@ import java.nio.file.Paths
 plugins {
     kotlin("multiplatform")
 }
+
+val hostBuiltinKeyDir = File(layout.buildDirectory.get().asFile, "generated/builtinApiKey/kotlin")
+DeepSeekKeyGen.writeKotlin(
+    hostBuiltinKeyDir,
+    "com.hfad.stockapplication.h5",
+    "HostBuiltinKey",
+    DeepSeekKeyGen.readKey(rootProject.projectDir),
+)
 
 kotlin {
     js(IR) {
@@ -20,6 +29,7 @@ kotlin {
     }
     sourceSets {
         val jsMain by getting {
+            kotlin.srcDir(hostBuiltinKeyDir)
             dependencies {
                 implementation("com.tencent.kuikly-open.core-render-web:base:${Version.getKuiklyVersion()}")
                 implementation("com.tencent.kuikly-open.core-render-web:h5:${Version.getKuiklyVersion()}")

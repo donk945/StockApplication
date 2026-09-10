@@ -5,7 +5,7 @@ package com.hfad.stockapplication.data.chat
  * 去空白标点后取适中字数，像一条精炼主题，不做成整句。
  */
 object SessionTitles {
-    const val FALLBACK = "股票问答"
+    const val FALLBACK = "AI 投研助手"
     const val MIN_LEN = 2
     /** 顶栏正中能稳住的长度；模型也按这个量级写。 */
     const val MAX_LEN = 10

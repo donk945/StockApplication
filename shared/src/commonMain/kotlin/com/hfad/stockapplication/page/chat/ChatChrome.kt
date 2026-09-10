@@ -105,6 +105,7 @@ internal fun ChatEmptyHome(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(ChatComposeTheme.pageBg)
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -112,7 +113,7 @@ internal fun ChatEmptyHome(
         DeepSeekLogo()
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "股票问答",
+            text = "AI 投研助手",
             fontSize = 20.sp,
             fontWeight = FontWeight.SemiBold,
             color = ChatComposeTheme.title,

@@ -33,3 +33,23 @@ data class ChartAskContext(
         }.trimEnd()
     }
 }
+
+/**
+ * 详情页与问答页不共享 [ChatStore]。长按 K 线后把选点挂在这里，
+ * 关掉详情栈，问答页 [pageDidAppear] 再取走挂到输入框上方。
+ */
+object ChartAskHandoff {
+    private var pending: ChartAskContext? = null
+
+    fun offer(context: ChartAskContext) {
+        pending = context
+    }
+
+    fun peek(): ChartAskContext? = pending
+
+    fun take(): ChartAskContext? {
+        val next = pending
+        pending = null
+        return next
+    }
+}

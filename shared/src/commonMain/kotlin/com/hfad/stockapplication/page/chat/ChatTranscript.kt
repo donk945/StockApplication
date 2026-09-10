@@ -19,6 +19,7 @@ import com.hfad.stockapplication.data.chat.KLineBar
 import com.hfad.stockapplication.data.chat.RelatedStockParser
 import com.hfad.stockapplication.data.chat.StockQuote
 import com.hfad.stockapplication.data.chat.TargetStock
+import com.hfad.stockapplication.debug.AgentDebugLog
 import com.hfad.stockapplication.state.chat.ChatStore
 import com.tencent.kuikly.compose.animation.core.LinearEasing
 import com.tencent.kuikly.compose.animation.core.RepeatMode
@@ -35,6 +36,7 @@ import com.tencent.kuikly.compose.foundation.layout.Box
 import com.tencent.kuikly.compose.foundation.layout.Column
 import com.tencent.kuikly.compose.foundation.layout.ExperimentalLayoutApi
 import com.tencent.kuikly.compose.foundation.layout.FlowRow
+import com.tencent.kuikly.compose.foundation.layout.PaddingValues
 import com.tencent.kuikly.compose.foundation.layout.Row
 import com.tencent.kuikly.compose.foundation.layout.Spacer
 import com.tencent.kuikly.compose.foundation.layout.fillMaxWidth
@@ -43,6 +45,9 @@ import com.tencent.kuikly.compose.foundation.layout.padding
 import com.tencent.kuikly.compose.foundation.layout.size
 import com.tencent.kuikly.compose.foundation.layout.width
 import com.tencent.kuikly.compose.foundation.layout.widthIn
+import com.tencent.kuikly.compose.foundation.lazy.LazyColumn
+import com.tencent.kuikly.compose.foundation.lazy.LazyListState
+import com.tencent.kuikly.compose.foundation.lazy.items
 import com.tencent.kuikly.compose.foundation.shape.RoundedCornerShape
 import com.tencent.kuikly.compose.material3.Text
 import com.tencent.kuikly.compose.ui.Alignment
@@ -52,6 +57,7 @@ import com.tencent.kuikly.compose.ui.geometry.Offset
 import com.tencent.kuikly.compose.ui.text.font.FontWeight
 import com.tencent.kuikly.compose.ui.unit.dp
 import com.tencent.kuikly.compose.ui.unit.sp
+import com.tencent.kuikly.core.datetime.DateTime
 import com.tencent.kuiklybase.markdown.compose.Markdown
 import com.tencent.kuiklybase.markdown.model.rememberMarkdownState
 import kotlin.math.PI
@@ -79,7 +85,7 @@ internal fun buildChatRows(
                 val thinking = streaming && (
                     message.body.isBlank() || message.body == ChatStore.LOADING_TEXT
                 )
-                val parts = RelatedStockParser.splitDisplayParts(source)
+                val parts = RelatedStockParser.splitDisplayParts(source, streaming)
                 val hasCards = !thinking && message.hasCards()
                 parts.forEachIndexed { index, text ->
                     rows += ChatRow.Part(
@@ -134,6 +140,72 @@ internal sealed class ChatRow {
 }
 
 @Composable
+internal fun ChatTranscriptList(
+    rows: List<ChatRow>,
+    listState: LazyListState,
+    sending: Boolean,
+    pageViewWidth: Float,
+    onRetryFailed: (String) -> Unit,
+    onAsk: (String) -> Unit,
+    onOpenKline: (ChatMessage, String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // #region agent log
+    LaunchedEffect(rows.size, sending) {
+        AgentDebugLog.emit(
+            "E",
+            "ChatTranscriptList",
+            "rows",
+            mapOf(
+                "rows" to rows.size.toString(),
+                "parts" to rows.count { it is ChatRow.Part }.toString(),
+                "streamParts" to rows.count { it is ChatRow.Part && it.streaming }.toString(),
+                "sending" to sending.toString(),
+            ),
+        )
+    }
+    // #endregion
+    LazyColumn(
+        modifier = modifier,
+        state = listState,
+        contentPadding = PaddingValues(top = 12.dp, bottom = 8.dp),
+    ) {
+        items(rows, key = { it.key }) { row ->
+            when (row) {
+                is ChatRow.User -> ChatBubbleRow(
+                    message = row.message,
+                    sending = false,
+                    pageViewWidth = pageViewWidth,
+                    onRetry = {},
+                )
+                is ChatRow.Failed -> ChatBubbleRow(
+                    message = row.message,
+                    sending = sending,
+                    pageViewWidth = pageViewWidth,
+                    onRetry = onRetryFailed,
+                )
+                is ChatRow.Part -> AssistantPartRow(
+                    text = row.text,
+                    first = row.first,
+                    last = row.last,
+                    streaming = row.streaming,
+                    pageViewWidth = pageViewWidth,
+                )
+                is ChatRow.Cards -> AssistantCardsRow(
+                    message = row.message,
+                    first = false,
+                    showFollowUps = row.showFollowUps,
+                    askEnabled = !sending,
+                    pageViewWidth = pageViewWidth,
+                    onAsk = onAsk,
+                    onOpenKline = onOpenKline,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 internal fun AssistantPartRow(
     text: String,
     first: Boolean,
@@ -146,13 +218,46 @@ internal fun AssistantPartRow(
     var parsed by remember { mutableStateOf(false) }
     val plain = RelatedStockParser.streamPlainText(text)
     val thinking = streaming && (text == ChatStore.LOADING_TEXT || text.isBlank())
+    // #region agent log
+    LaunchedEffect(streaming, thinking) {
+        AgentDebugLog.emit(
+            "A",
+            "AssistantPartRow",
+            "part-mode",
+            mapOf(
+                "streaming" to streaming.toString(),
+                "thinking" to thinking.toString(),
+                "parsed" to parsed.toString(),
+                "len" to text.length.toString(),
+                "stars" to text.contains("**").toString(),
+                "heading" to text.contains("#").toString(),
+                "first" to first.toString(),
+                "last" to last.toString(),
+            ),
+        )
+    }
+    // #endregion
     LaunchedEffect(text, streaming, thinking) {
-        if (thinking) {
+        if (thinking || streaming) {
             parsed = false
             return@LaunchedEffect
         }
+        val started = DateTime.currentTimestamp()
         markdownState.parse(RelatedStockParser.streamMarkdown(text), false)
         parsed = true
+        // #region agent log
+        AgentDebugLog.emit(
+            "B",
+            "AssistantPartRow",
+            "parse-done",
+            mapOf(
+                "len" to text.length.toString(),
+                "ms" to (DateTime.currentTimestamp() - started).toString(),
+                "stars" to text.contains("**").toString(),
+                "heading" to text.contains("#").toString(),
+            ),
+        )
+        // #endregion
     }
     val shape = RoundedCornerShape(
         topStart = if (first) 12.dp else 0.dp,
@@ -369,26 +474,25 @@ private fun AssistantTargetCards(
     }
     val stock = listed.first()
     val quote = message.quoteFor(stock.code)
-    TargetStockChip(
-        name = stock.name,
-        code = stock.code,
-        changeText = listOfNotNull(
-            quote?.change?.takeIf { it.isNotBlank() },
-            quote?.changePercent?.takeIf { it.isNotBlank() },
-        ).joinToString("  "),
+    val bars = message.klineFor(stock.code)
+    TargetQuoteBlock(
+        quote = quote ?: StockQuote(
+            code = stock.code,
+            market = stock.market,
+            name = stock.name,
+            price = "—",
+            prevClose = "",
+            change = "",
+            changePercent = "",
+            amount = "—",
+            time = "",
+        ),
+        bars = bars,
         onClick = { onOpenKline(message, stock.code) },
     )
-    if (quote != null) {
+    if (stock.isIndex && quote != null) {
         Spacer(modifier = Modifier.height(10.dp))
-        TargetQuoteBlock(
-            quote = quote,
-            bars = message.klineFor(stock.code),
-            onClick = { onOpenKline(message, stock.code) },
-        )
-        if (stock.isIndex) {
-            Spacer(modifier = Modifier.height(10.dp))
-            IndexBreadthRow(quote = quote)
-        }
+        IndexBreadthRow(quote = quote)
     }
 }
 
@@ -590,15 +694,18 @@ private fun TargetQuoteBlock(
                     )
                 }
             }
-            if (bars.size >= 2) {
-                Box(
-                    modifier = Modifier
-                        .width(88.dp)
-                        .height(40.dp)
-                ) {
+            Box(
+                modifier = Modifier
+                    .width(88.dp)
+                    .height(40.dp),
+            ) {
+                if (bars.size >= 2) {
                     QuoteSparkline(
                         bars = bars,
                         rising = rising,
+                        modifier = Modifier
+                            .width(88.dp)
+                            .height(40.dp),
                     )
                 }
             }
@@ -618,7 +725,7 @@ private fun TargetQuoteBlock(
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = "点击查看走势",
+            text = "查看详情 ›",
             fontSize = 11.sp,
             color = ChatComposeTheme.accent,
         )

@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     kotlin("multiplatform")
     kotlin("native.cocoapods")
@@ -9,6 +11,23 @@ plugins {
 }
 
 val KEY_PAGE_NAME = "pageName"
+
+val builtinApiKeyDir = File(layout.buildDirectory.get().asFile, "generated/builtinApiKey/kotlin")
+val deepSeekApiKey = DeepSeekKeyGen.readKey(rootProject.projectDir)
+DeepSeekKeyGen.writeKotlin(
+    builtinApiKeyDir,
+    "com.hfad.stockapplication.infra",
+    "BuiltinApiKey",
+    deepSeekApiKey,
+)
+DeepSeekKeyGen.writeObjcHeader(
+    File(rootProject.projectDir, "iosApp/iosApp/KuiklyExpand/DeepSeekAPIKey.h"),
+    deepSeekApiKey,
+)
+DeepSeekKeyGen.writeEts(
+    File(rootProject.projectDir, "ohosApp/entry/src/main/ets/kuikly/generated/BuiltinApiKey.ets"),
+    deepSeekApiKey,
+)
 
 kotlin {
     androidTarget {
@@ -45,6 +64,7 @@ kotlin {
 
     sourceSets {
         val commonMain by getting {
+            kotlin.srcDir(builtinApiKeyDir)
             dependencies {
                 implementation("com.tencent.kuikly-open:core:${Version.getKuiklyOhosVersion()}")
                 implementation("com.tencent.kuikly-open:compose:${Version.getKuiklyOhosVersion()}")

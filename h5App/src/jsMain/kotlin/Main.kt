@@ -15,11 +15,12 @@ fun main() {
     val night = window.matchMedia("(prefers-color-scheme: dark)").matches
     val params = urlParams.toMutableMap()
     params["is_H5"] = "1"
+    document.title = "股票问答"
     if (!params.containsKey("isNightMode")) {
         params["isNightMode"] = if (night) "1" else "0"
     }
-    if (!params.containsKey("deepseekApiKey")) {
-        params["deepseekApiKey"] = ""
+    if (!params.containsKey("deepseekApiKey") || params["deepseekApiKey"].isNullOrBlank()) {
+        params["deepseekApiKey"] = HostBuiltinKey.DEEPSEEK
     }
     val paramMap: Map<String, Any> = mapOf(
         "statusBarHeight" to 0f,

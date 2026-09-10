@@ -1,0 +1,14 @@
+{
+  "description": "股票问答 小程序宿主",
+  "packOptions": {
+    "ignore": []
+  },
+  "setting": {
+    "es6": true,
+    "minified": true
+  },
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "股票问答",
+  "miniprogramRoot": "./"
+}

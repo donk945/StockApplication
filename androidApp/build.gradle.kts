@@ -5,13 +5,17 @@ plugins {
     kotlin("android")
 }
 
-val localProperties = Properties().apply {
+val keyProperties = Properties().apply {
+    val committed = rootProject.file("key.properties")
+    if (committed.exists()) {
+        committed.inputStream().use { load(it) }
+    }
     val localFile = rootProject.file("local.properties")
     if (localFile.exists()) {
         localFile.inputStream().use { load(it) }
     }
 }
-val deepseekApiKey = localProperties.getProperty("DEEPSEEK_API_KEY", "")
+val deepseekApiKey = keyProperties.getProperty("DEEPSEEK_API_KEY", "")
 
 android {
     namespace = "com.hfad.stockapplication"

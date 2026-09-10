@@ -19,12 +19,14 @@ import com.tencent.kuikly.compose.foundation.layout.fillMaxWidth
 import com.tencent.kuikly.compose.foundation.layout.height
 import com.tencent.kuikly.compose.foundation.layout.heightIn
 import com.tencent.kuikly.compose.foundation.layout.padding
+import com.tencent.kuikly.compose.foundation.layout.size
 import com.tencent.kuikly.compose.foundation.layout.width
 import com.tencent.kuikly.compose.foundation.shape.RoundedCornerShape
 import com.tencent.kuikly.compose.material3.Text
 import com.tencent.kuikly.compose.ui.Alignment
 import com.tencent.kuikly.compose.ui.Modifier
 import com.tencent.kuikly.compose.ui.draw.clip
+import com.tencent.kuikly.compose.ui.graphics.Color
 import com.tencent.kuikly.compose.ui.text.font.FontWeight
 import com.tencent.kuikly.compose.ui.unit.dp
 import com.tencent.kuikly.compose.ui.unit.sp
@@ -128,7 +130,10 @@ fun StockQuoteSection(
             val firstVisibleDay = visibleDaily.firstOrNull()?.day.orEmpty()
             val lastVisibleDay = visibleDaily.lastOrNull()?.day.orEmpty()
             val spanYears = klineYear(firstVisibleDay) != klineYear(lastVisibleDay)
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+            ) {
                 Text(
                     text = "日 K",
                     fontSize = 14.sp,
@@ -143,6 +148,12 @@ fun StockQuoteSection(
                         color = ChatComposeTheme.placeholder,
                     )
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                MaLegendChip("MA5", MaColors.ma5)
+                Spacer(modifier = Modifier.width(8.dp))
+                MaLegendChip("MA10", MaColors.ma10)
+                Spacer(modifier = Modifier.width(8.dp))
+                MaLegendChip("MA20", MaColors.ma20)
             }
             Spacer(modifier = Modifier.height(8.dp))
             StockKlineChart(
@@ -190,6 +201,20 @@ private fun ChartTabRow(
             onClick = { onSelect(QuoteChartTab.Daily) },
             modifier = Modifier.weight(1f),
         )
+    }
+}
+
+@Composable
+private fun MaLegendChip(label: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(color),
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(text = label, fontSize = 10.sp, color = ChatComposeTheme.placeholder)
     }
 }
 

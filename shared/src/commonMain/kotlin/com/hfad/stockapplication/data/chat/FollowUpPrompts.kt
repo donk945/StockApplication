@@ -1,7 +1,8 @@
 package com.hfad.stockapplication.data.chat
 
 /**
- * 目标股票 / 指数卡片下方的常见追问。芯片展示 [label]，发送时带上名称与代码。
+ * 目标股票 / 指数卡片下方的常见追问。
+ * 芯片展示 [label]；[question] 是用户气泡里的口语，不带给模型的格式指令。
  */
 data class FollowUpPrompt(
     val label: String,
@@ -16,69 +17,69 @@ object FollowUpPrompts {
         }
         if (stocks.all { it.isIndex }) {
             return if (stocks.size == 1) {
-                val name = named(stocks.first())
+                val name = spoken(stocks.first())
                 listOf(
                     FollowUpPrompt(
                         label = "今天怎么走",
-                        question = "结合最新行情，${name}今天怎么走？先给结论，再说明驱动和风险。",
+                        question = "${name}今天怎么走？",
                     ),
                     FollowUpPrompt(
                         label = "量能怎么看",
-                        question = "${name}近期量能怎么看？不要编造精确成交数字。",
+                        question = "${name}量能怎么样？",
                     ),
                     FollowUpPrompt(
                         label = "和深成指比",
-                        question = "把${name}和深证成指（399001）近期表现对比一下，结论先说。",
+                        question = "${name}跟深成指比怎么样？",
                     ),
                 )
             } else {
-                val list = stocks.joinToString("、", transform = ::named)
+                val list = spokenList(stocks)
                 listOf(
                     FollowUpPrompt(
                         label = "谁更强",
-                        question = "对比${list}近期走势，谁相对更强？结论先说。",
+                        question = "${list}这几个谁更强？",
                     ),
                     FollowUpPrompt(
                         label = "怎么分化",
-                        question = "说明${list}当前分化的主要原因，不要编造。",
+                        question = "${list}现在怎么分化的？",
                     ),
                 )
             }
         }
         return if (stocks.size == 1) {
-            val name = named(stocks.first())
+            val name = spoken(stocks.first())
             listOf(
                 FollowUpPrompt(
                     label = "现在能买吗",
-                    question = "结合最新行情，${name}现在适合买入吗？先给结论，再说明理由和主要风险。",
+                    question = "${name}现在能买吗？",
                 ),
                 FollowUpPrompt(
                     label = "有什么风险",
-                    question = "${name}当前最主要的风险有哪些？按重要性简要列出，不要编造。",
+                    question = "${name}有什么风险？",
                 ),
                 FollowUpPrompt(
                     label = "同业怎么比",
-                    question = "把${name}和同行业龙头比估值、增长和风险，结论先说。",
+                    question = "${name}跟同行业比怎么样？",
                 ),
                 FollowUpPrompt(
                     label = "近期催化剂",
-                    question = "${name}近一季有哪些催化或利空？只写能对应到公开信息的事项。",
+                    question = "${name}最近有什么催化？",
                 ),
             )
         } else {
-            val list = stocks.joinToString("、", transform = ::named)
+            val list = spokenList(stocks)
             listOf(
                 FollowUpPrompt(
                     label = "谁更值得关注",
-                    question = "对比${list}，谁更值得关注？给出排序和理由。",
+                    question = "${list}这几个谁更值得关注？",
                 ),
                 FollowUpPrompt(
                     label = "核心差异",
-                    question = "对比${list}的业务和估值差异，结论先说。",
+                    question = "${list}主要差在哪？",
                 ),
                 FollowUpPrompt(
                     label = "各自风险",
-                    question = "分别说明${list}当前最主要的风险，不要编造。",
+                    question = "${list}各自有什么风险？",
                 ),
             )
         }
@@ -88,20 +89,24 @@ object FollowUpPrompts {
         if (picks.isEmpty()) {
             return emptyList()
         }
-        val list = picks.joinToString("、", transform = ::named)
+        val list = spokenList(picks)
         return listOf(
             FollowUpPrompt(
                 label = "这几只谁更强",
-                question = "对比${list}，谁更值得关注？结论先说，不要编造没点名的公司。",
+                question = "${list}这几只谁更强？",
             ),
             FollowUpPrompt(
                 label = "各自风险",
-                question = "分别说明${list}当前最主要的风险，不要编造。",
+                question = "${list}各自有什么风险？",
             ),
         )
     }
 
-    private fun named(stock: TargetStock): String {
-        return "${stock.name}（${stock.code}）"
+    private fun spoken(stock: TargetStock): String {
+        return stock.name.trim().ifBlank { stock.code }
+    }
+
+    private fun spokenList(stocks: List<TargetStock>): String {
+        return stocks.joinToString("、", transform = ::spoken)
     }
 }

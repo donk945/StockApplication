@@ -3,6 +3,7 @@ import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import router from '@ohos.router';
 import { KuiklyViewDelegate } from '../kuikly/KuiklyViewDelegate';
 import globalNativeManager from '../kuikly/MyNativeManager';
+import { DEEPSEEK_API_KEY } from '../kuikly/generated/BuiltinApiKey';
 
 @Entry
 @Component
@@ -58,7 +59,7 @@ struct Index {
     return {
       appId: 1,
       isNightMode: night,
-      deepseekApiKey: '',
+      deepseekApiKey: DEEPSEEK_API_KEY,
     };
   }
 }

@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import com.hfad.stockapplication.component.chart.ChartAskCard
 import com.hfad.stockapplication.component.theme.ChatComposeTheme
 import com.hfad.stockapplication.data.chat.ChartAskContext
-import com.hfad.stockapplication.debug.AgentDebugLog
 import com.tencent.kuikly.compose.extension.keyboardHeightChange
 import com.tencent.kuikly.compose.foundation.background
 import com.tencent.kuikly.compose.foundation.clickable
@@ -78,18 +77,6 @@ internal fun ChatComposer(
                     .widthIn(min = 0.dp)
                     .keyboardHeightChange {
                         onKeyboardHeight(it.height)
-                        // #region agent log
-                        AgentDebugLog.emit(
-                            "A",
-                            "StockChatPage.composer",
-                            "kb-height",
-                            mapOf(
-                                "h" to it.height.toString(),
-                                "dur" to it.duration.toString(),
-                                "sending" to sending.toString(),
-                            ),
-                        )
-                        // #endregion
                     },
                 placeholder = {
                     Text(

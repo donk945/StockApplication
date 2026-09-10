@@ -8,7 +8,6 @@ import com.hfad.stockapplication.data.chat.TargetStock
 import com.tencent.kuikly.compose.foundation.Canvas
 import com.tencent.kuikly.compose.foundation.background
 import com.tencent.kuikly.compose.foundation.clickable
-import com.tencent.kuikly.compose.foundation.layout.Box
 import com.tencent.kuikly.compose.foundation.layout.Column
 import com.tencent.kuikly.compose.foundation.layout.Row
 import com.tencent.kuikly.compose.foundation.layout.Spacer
@@ -120,15 +119,17 @@ private fun ComparisonCell(
         )
         Spacer(modifier = Modifier.height(8.dp))
         ChangeRatioBar(percent = percent, maxAbs = maxAbs)
+        Spacer(modifier = Modifier.height(8.dp))
         if (bars.size >= 2) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(
+            QuoteSparkline(
+                bars = bars,
+                rising = rising,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(28.dp),
-            ) {
-                QuoteSparkline(bars = bars, rising = rising)
-            }
+            )
+        } else {
+            Spacer(modifier = Modifier.height(28.dp))
         }
     }
 }

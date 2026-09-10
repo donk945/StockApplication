@@ -1,3 +1,4 @@
+import com.hfad.stockapplication.miniapp.HostBuiltinKey
 import com.hfad.stockapplication.miniapp.KuiklyWebRenderViewDelegator
 import com.tencent.kuikly.core.render.web.KuiklyRenderView
 import com.tencent.kuikly.core.render.web.IKuiklyRenderViewLifecycleCallback
@@ -43,8 +44,9 @@ fun renderView(json: dynamic) {
         val isAndroid = systemInfo.platform == "android"
         val params = paramsMap["param"].unsafeCast<FastMutableMap<String, Any>>()
         params["is_wx_mp"] = "true"
-        if (params["deepseekApiKey"] == null) {
-            params["deepseekApiKey"] = ""
+        val fromHost = params["deepseekApiKey"] as? String
+        if (fromHost.isNullOrBlank()) {
+            params["deepseekApiKey"] = HostBuiltinKey.DEEPSEEK
         }
         if (params["isNightMode"] == null) {
             params["isNightMode"] = if (systemInfo.theme == "dark") "1" else "0"

@@ -158,23 +158,29 @@ object RelatedStockParser {
      * 把助手正文拆成多段，供 LazyColumn 每段一个 item。
      * Kuikly 不能在高于视口的单个 item 内滚动；一段过长就会白屏后卡在尾部、无法上翻。
      */
-    fun splitDisplayParts(body: String): List<String> {
+    fun splitDisplayParts(body: String, streaming: Boolean = false): List<String> {
         val source = body.ifBlank { "正在分析…" }
+        val maxChars = if (streaming) 120 else 220
+        val maxLines = if (streaming) 4 else 6
         val paras = source
             .split(paraSplit)
             .map { it.trimEnd() }
             .filter { it.isNotEmpty() }
         val chunks = if (paras.size >= 2) {
-            paras.flatMap { splitLongBlock(it) }
+            paras.flatMap { splitLongBlock(it, maxChars, maxLines) }
         } else {
-            splitLongBlock(source)
+            splitLongBlock(source, maxChars, maxLines)
         }
         return chunks.ifEmpty { listOf(source) }
     }
 
-    private fun splitLongBlock(source: String): List<String> {
+    private fun splitLongBlock(
+        source: String,
+        maxChars: Int,
+        maxLines: Int,
+    ): List<String> {
         val lines = source.lines()
-        if (lines.size <= 6 && source.length <= 220) {
+        if (lines.size <= maxLines && source.length <= maxChars) {
             return listOf(source)
         }
         val chunks = mutableListOf<String>()
@@ -199,9 +205,9 @@ object RelatedStockParser {
                 buf.append('\n')
             }
             buf.append(line)
-            if (buf.length >= 220 && !hasUnclosedMarkers(buf)) {
+            if (buf.length >= maxChars && !hasUnclosedMarkers(buf)) {
                 flush()
-            } else if (buf.length >= 480) {
+            } else if (buf.length >= maxChars * 2) {
                 flush()
             }
         }

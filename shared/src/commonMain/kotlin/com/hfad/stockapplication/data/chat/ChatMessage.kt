@@ -5,7 +5,7 @@ package com.hfad.stockapplication.data.chat
  * 助手 [body] 含标题与对用户问题的回答。「目标股票 / 目标指数」仅在问到具体标的时才有；
  * 名称由蓝色可点芯片绘制，行情卡也可缺省。对比多只时 [targets] 有多条。
  * 概念问用 [relatedPicks] 做 2～3 只可点芯片，不当作目标卡。
- * [related] / 行情仅数据；关联股与完整走势在详情抽屉展示。
+ * [related] / 行情仅数据；关联股与完整走势在详情页 `stock_detail` 展示。
  */
 data class ChatMessage(
     val id: String,

@@ -4,10 +4,12 @@
 按包分层，新代码放进对应层。
 
 ```
-infra/          宿主桥、Page 基类、SSE
+infra/          宿主桥、Page 基类、SSE、页面路由
 data/chat/      模型、解析、仓库（无 Compose）
-state/chat/     ChatStore：页面状态与业务流程
-page/chat/      @Page 与本页 Compose（可拆文件，不进 component）
+state/chat/     ChatStore：问答页状态
+state/detail/   DetailStore：详情行情与本页解读
+page/chat/      @Page("stock_chat")
+page/detail/    @Page("stock_detail")
 component/      可复用 ComposeView；chart 仍属本产品行情 UI
 ```
 

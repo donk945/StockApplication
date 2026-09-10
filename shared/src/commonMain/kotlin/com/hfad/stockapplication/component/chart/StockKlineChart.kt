@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberUpdatedState
 import com.hfad.stockapplication.component.theme.ChatComposeTheme
 import com.hfad.stockapplication.data.chat.KLineBar
+import com.hfad.stockapplication.data.chat.KlineIndicators
 import com.tencent.kuikly.compose.foundation.Canvas
 import com.tencent.kuikly.compose.foundation.gestures.awaitEachGesture
 import com.tencent.kuikly.compose.foundation.gestures.awaitFirstDown
@@ -21,6 +22,7 @@ import com.tencent.kuikly.compose.material3.Text
 import com.tencent.kuikly.compose.ui.Alignment
 import com.tencent.kuikly.compose.ui.Modifier
 import com.tencent.kuikly.compose.ui.geometry.Offset
+import com.tencent.kuikly.compose.ui.graphics.Color
 import com.tencent.kuikly.compose.ui.input.pointer.PointerEvent
 import com.tencent.kuikly.compose.ui.input.pointer.PointerInputScope
 import com.tencent.kuikly.compose.ui.input.pointer.positionChanged
@@ -123,6 +125,9 @@ fun StockKlineChart(
         val local = indexFromX(x, width, win.count)
         onLongPressLatest.value(win.start + local)
     }
+    val ma5 = KlineIndicators.sma(bars, 5)
+    val ma10 = KlineIndicators.sma(bars, 10)
+    val ma20 = KlineIndicators.sma(bars, 20)
     val highLabel = drawable.maxOf { it.second.high }.toPlain()
     val lowLabel = drawable.minOf { it.second.low }.toPlain()
     val firstDay = visibleBars.first().day
@@ -163,8 +168,20 @@ fun StockKlineChart(
                     }
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val min = drawable.minOf { it.second.low }
-                    val max = drawable.maxOf { it.second.high }
+                    var min = drawable.minOf { it.second.low }
+                    var max = drawable.maxOf { it.second.high }
+                    val from = resolved.start
+                    val to = (from + visibleBars.size).coerceAtMost(bars.size)
+                    fun includeMa(values: List<Double?>) {
+                        for (i in from until to) {
+                            val value = values.getOrNull(i) ?: continue
+                            min = minOf(min, value)
+                            max = maxOf(max, value)
+                        }
+                    }
+                    includeMa(ma5)
+                    includeMa(ma10)
+                    includeMa(ma20)
                     val range = (max - min).let { if (it <= 0.0) 1.0 else it }
                     val count = visibleBars.size
                     val slot = size.width / count
@@ -206,6 +223,33 @@ fun StockKlineChart(
                             strokeWidth = bodyWidth.coerceAtLeast(2f),
                         )
                     }
+                    fun drawMa(values: List<Double?>, color: Color) {
+                        var prev: Offset? = null
+                        parsed.forEachIndexed { index, _ ->
+                            val absolute = resolved.start + index
+                            val value = values.getOrNull(absolute)
+                            if (value == null) {
+                                prev = null
+                                return@forEachIndexed
+                            }
+                            val point = Offset(
+                                slot * index + slot / 2f,
+                                yOf(value, min, range, size.height),
+                            )
+                            prev?.let { start ->
+                                drawLine(
+                                    color = color,
+                                    start = start,
+                                    end = point,
+                                    strokeWidth = 1.6f,
+                                )
+                            }
+                            prev = point
+                        }
+                    }
+                    drawMa(ma5, MaColors.ma5)
+                    drawMa(ma10, MaColors.ma10)
+                    drawMa(ma20, MaColors.ma20)
                     longPress.center?.let { drawLongPressRing(it, longPress.progress) }
                 }
             }
@@ -345,6 +389,12 @@ private suspend fun PointerInputScope.detectKlineGestures(
 
 private fun minVisibleCount(total: Int): Int {
     return MIN_VISIBLE_KLINE_BARS.coerceAtMost(total).coerceAtLeast(1)
+}
+
+internal object MaColors {
+    val ma5 = Color(0xFFFF9F0A)
+    val ma10 = Color(0xFF4D6BFE)
+    val ma20 = Color(0xFFBF5AF2)
 }
 
 internal fun formatKlineAxisDay(raw: String, withYear: Boolean = false): String {

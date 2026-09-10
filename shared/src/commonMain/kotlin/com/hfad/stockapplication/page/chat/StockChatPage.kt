@@ -3,36 +3,32 @@ package com.hfad.stockapplication.page.chat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.hfad.stockapplication.component.chart.StockKlineSheet
 import com.hfad.stockapplication.component.theme.ChatComposeTheme
 import com.hfad.stockapplication.component.theme.ProvideChatColors
 import com.hfad.stockapplication.data.chat.DeepSeekChatRepository
 import com.hfad.stockapplication.data.chat.LocalChatRepository
-import com.hfad.stockapplication.data.chat.RelatedStockParser
 import com.hfad.stockapplication.data.chat.TencentMarketRepository
 import com.hfad.stockapplication.data.chat.UserSettingsRepository
 import com.hfad.stockapplication.debug.AgentDebugLog
+import com.hfad.stockapplication.infra.AppPages
 import com.hfad.stockapplication.infra.BaseComposePager
 import com.hfad.stockapplication.infra.SseModule
 import com.hfad.stockapplication.infra.bridgeModule
+import com.hfad.stockapplication.infra.openAppPage
 import com.hfad.stockapplication.state.chat.ChatStore
 import com.hfad.stockapplication.state.chat.ProfilePane
+import com.hfad.stockapplication.state.detail.DetailStore
 import com.tencent.kuikly.compose.BackHandler
-import kotlinx.coroutines.delay
 import com.tencent.kuikly.compose.foundation.background
 import com.tencent.kuikly.compose.foundation.layout.Box
 import com.tencent.kuikly.compose.foundation.layout.Column
-import com.tencent.kuikly.compose.foundation.layout.PaddingValues
 import com.tencent.kuikly.compose.foundation.layout.Spacer
 import com.tencent.kuikly.compose.foundation.layout.fillMaxSize
 import com.tencent.kuikly.compose.foundation.layout.fillMaxWidth
 import com.tencent.kuikly.compose.foundation.layout.height
-import com.tencent.kuikly.compose.foundation.lazy.LazyColumn
-import com.tencent.kuikly.compose.foundation.lazy.items
 import com.tencent.kuikly.compose.foundation.lazy.rememberLazyListState
 import com.tencent.kuikly.compose.setContent
 import com.tencent.kuikly.compose.ui.Modifier
@@ -47,6 +43,7 @@ import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
  * 股票问答主页面（路由名：stock_chat）。
  *
  * Compose + 官方 kuiklybase:markdown 渲染助手回复。
+ * 卡片详情走 `stock_detail`。
  */
 @Page("stock_chat", supportInLocal = true)
 internal class StockChatPage : BaseComposePager() {
@@ -62,7 +59,7 @@ internal class StockChatPage : BaseComposePager() {
 
     override fun created() {
         super.created()
-        val apiKey = pagerData.params.optString(KEY_DEEPSEEK_API_KEY).orEmpty()
+        val apiKey = deepSeekKeyFromPager(pagerData.params)
         val sp = acquireModule<SharedPreferencesModule>(SharedPreferencesModule.MODULE_NAME)
         val historyRepo = LocalChatRepository(sp)
         val network = acquireModule<NetworkModule>(NetworkModule.MODULE_NAME)
@@ -90,6 +87,13 @@ internal class StockChatPage : BaseComposePager() {
         }
     }
 
+    override fun pageDidAppear() {
+        super.pageDidAppear()
+        if (::store.isInitialized) {
+            store.takePendingChartAsk()
+        }
+    }
+
     override fun pageWillDestroy() {
         if (::store.isInitialized) {
             store.persistOnExit()
@@ -104,23 +108,6 @@ internal class StockChatPage : BaseComposePager() {
         val bottomInset = systemBottomInset()
 
         ProvideChatColors(dark = store.darkTheme) {
-            // #region agent log
-            LaunchedEffect(store.messagesEmpty, store.isSending, keyboardHeight) {
-                AgentDebugLog.emit(
-                    "D",
-                    "StockChatPage.ChatScreen",
-                    "branch",
-                    mapOf(
-                        "empty" to store.messagesEmpty.toString(),
-                        "sending" to store.isSending.toString(),
-                        "kb" to keyboardHeight.toString(),
-                        "inset" to bottomInset.toString(),
-                        "pageH" to pagerData.pageViewHeight.toString(),
-                        "msgs" to store.messages.size.toString(),
-                    ),
-                )
-            }
-            // #endregion
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -134,145 +121,62 @@ internal class StockChatPage : BaseComposePager() {
                     onMenuClick = { store.openDrawer() },
                     onNewChat = { store.startNewChat() },
                 )
-                    if (store.messagesEmpty) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .background(ChatComposeTheme.pageBg)
-                        ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .clipToBounds()
+                            .background(ChatComposeTheme.pageBg),
+                    ) {
+                        val streamingId = if (store.isSending) {
+                            store.messages.lastOrNull { !it.fromUser }?.id
+                        } else {
+                            null
+                        }
+                        val chatRows = if (store.messagesEmpty) {
+                            emptyList()
+                        } else {
+                            buildChatRows(store.messages, streamingId)
+                        }
+                        ChatTranscriptList(
+                            rows = chatRows,
+                            listState = listState,
+                            sending = store.isSending,
+                            pageViewWidth = pagerData.pageViewWidth,
+                            onRetryFailed = { id ->
+                                store.retryFailed(id) { error ->
+                                    bridgeModule.toast(error)
+                                }
+                            },
+                            onAsk = { question ->
+                                if (!store.isSending) {
+                                    store.updateDraft(question)
+                                    sendDraft()
+                                }
+                            },
+                            onOpenKline = { message, code ->
+                                val pageData = DetailStore.fromChatMessage(message, code)
+                                if (pageData == null) {
+                                    bridgeModule.toast("暂无行情标的")
+                                } else {
+                                    openAppPage(AppPages.DETAIL, pageData)
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        if (store.messagesEmpty) {
                             ChatEmptyHome(
                                 onPrompt = { prompt ->
                                     if (store.isSending) {
                                         return@ChatEmptyHome
                                     }
                                     store.updateDraft(prompt)
+                                    keyboardHeight = 0f
+                                    bridgeModule.closeKeyboard()
                                     sendDraft()
                                 },
                             )
                         }
-                    } else {
-                        val streamingId = if (store.isSending) {
-                            store.messages.lastOrNull { !it.fromUser }?.id
-                        } else {
-                            null
-                        }
-                        val lastUserId = store.messages.lastOrNull { it.fromUser }?.id
-                        val chatRows = buildChatRows(store.messages, streamingId)
-                        val lastUserRow = chatRows.indexOfLast { it is ChatRow.User }
-                        LazyColumn(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .clipToBounds()
-                                .background(ChatComposeTheme.pageBg),
-                            state = listState,
-                            contentPadding = PaddingValues(top = 12.dp, bottom = 8.dp),
-                            beyondBoundsItemCount = 12,
-                        ) {
-                            items(chatRows, key = { it.key }) { row ->
-                                when (row) {
-                                    is ChatRow.User -> ChatBubbleRow(
-                                        message = row.message,
-                                        sending = false,
-                                        pageViewWidth = pagerData.pageViewWidth,
-                                        onRetry = {},
-                                    )
-                                    is ChatRow.Failed -> ChatBubbleRow(
-                                        message = row.message,
-                                        sending = store.isSending,
-                                        pageViewWidth = pagerData.pageViewWidth,
-                                        onRetry = { id ->
-                                            store.retryFailed(id) { error ->
-                                                bridgeModule.toast(error)
-                                            }
-                                        },
-                                    )
-                                    is ChatRow.Part -> AssistantPartRow(
-                                        text = row.text,
-                                        first = row.first,
-                                        last = row.last,
-                                        streaming = row.streaming,
-                                        pageViewWidth = pagerData.pageViewWidth,
-                                    )
-                                    is ChatRow.Cards -> AssistantCardsRow(
-                                        message = row.message,
-                                        first = false,
-                                        showFollowUps = row.showFollowUps,
-                                        askEnabled = !store.isSending,
-                                        pageViewWidth = pagerData.pageViewWidth,
-                                        onAsk = { question ->
-                                            if (store.isSending) {
-                                                return@AssistantCardsRow
-                                            }
-                                            store.updateDraft(question)
-                                            sendDraft()
-                                        },
-                                        onOpenKline = { message, code ->
-                                            store.openKline(message, code)
-                                        },
-                                    )
-                                }
-                            }
-                            item {
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-                        }
-                        val pinEpoch = if (store.isSending) chatRows.size else 0
-                        LaunchedEffect(lastUserId, store.isSending, lastUserRow, pinEpoch) {
-                            if (lastUserRow < 0) {
-                                return@LaunchedEffect
-                            }
-                            listState.scrollToItem(lastUserRow, 0)
-                            // #region agent log
-                            AgentDebugLog.emit(
-                                "B",
-                                "StockChatPage.scroll",
-                                "scroll-pin",
-                                mapOf(
-                                    "userRow" to lastUserRow.toString(),
-                                    "idx" to listState.firstVisibleItemIndex.toString(),
-                                    "off" to listState.firstVisibleItemScrollOffset.toString(),
-                                    "canBack" to listState.canScrollBackward.toString(),
-                                    "sending" to store.isSending.toString(),
-                                    "rows" to chatRows.size.toString(),
-                                    "pinEpoch" to pinEpoch.toString(),
-                                    "kb" to keyboardHeight.toString(),
-                                    "inset" to bottomInset.toString(),
-                                    "pageH" to pagerData.pageViewHeight.toString(),
-                                    "sb" to pagerData.statusBarHeight.toString(),
-                                ),
-                            )
-                            // #endregion
-                        }
-                        // #region agent log
-                        LaunchedEffect(
-                            keyboardHeight,
-                            store.isSending,
-                            chatRows.size,
-                            listState.firstVisibleItemIndex,
-                            listState.firstVisibleItemScrollOffset,
-                        ) {
-                            AgentDebugLog.emit(
-                                "C",
-                                "StockChatPage.list",
-                                "list-layout",
-                                mapOf(
-                                    "kb" to keyboardHeight.toString(),
-                                    "inset" to bottomInset.toString(),
-                                    "composerPad" to maxOf(bottomInset, keyboardHeight).toString(),
-                                    "empty" to "false",
-                                    "sending" to store.isSending.toString(),
-                                    "rows" to chatRows.size.toString(),
-                                    "userRow" to lastUserRow.toString(),
-                                    "idx" to listState.firstVisibleItemIndex.toString(),
-                                    "off" to listState.firstVisibleItemScrollOffset.toString(),
-                                    "canBack" to listState.canScrollBackward.toString(),
-                                    "pageH" to pagerData.pageViewHeight.toString(),
-                                ),
-                            )
-                        }
-                        // #endregion
                     }
                 ChatComposer(
                     draft = store.draft,
@@ -308,18 +212,8 @@ internal class StockChatPage : BaseComposePager() {
                     },
                     onClearChartAsk = { store.clearChartAsk() },
                     onSend = {
-                        // #region agent log
-                        AgentDebugLog.emit(
-                            "E",
-                            "StockChatPage.onSend",
-                            "send-tap",
-                            mapOf(
-                                "kb" to keyboardHeight.toString(),
-                                "empty" to store.messagesEmpty.toString(),
-                                "msgs" to store.messages.size.toString(),
-                            ),
-                        )
-                        // #endregion
+                        keyboardHeight = 0f
+                        bridgeModule.closeKeyboard()
                         sendDraft()
                     },
                     onStop = { store.stopSending() },
@@ -339,54 +233,6 @@ internal class StockChatPage : BaseComposePager() {
                     onSettings = { store.openSettings() },
                     statusBarHeight = pagerData.statusBarHeight,
                     bottomInset = bottomInset,
-                )
-            }
-            val klineMessage = store.klineMessage
-            val liveCode = klineMessage?.targetCode.orEmpty()
-            LaunchedEffect(liveCode) {
-                if (liveCode.isBlank()) {
-                    return@LaunchedEffect
-                }
-                while (true) {
-                    store.refreshLiveMarket()
-                    delay(3_000)
-                }
-            }
-            key(store.klineSheetEpoch) {
-                val summaryBody = klineMessage?.body.orEmpty()
-                val summaryText = RelatedStockParser.answerExcerpt(summaryBody)
-                val liveCode = klineMessage?.targetCode.orEmpty()
-                val openedPick = klineMessage?.pickByCode(liveCode)
-                val openedIndex = openedPick?.isIndex == true
-                StockKlineSheet(
-                    visible = klineMessage != null,
-                    name = klineMessage?.targetName ?: klineMessage?.quote?.name.orEmpty(),
-                    code = liveCode.ifBlank { klineMessage?.quote?.code.orEmpty() },
-                    quote = klineMessage?.quote,
-                    bars = klineMessage?.kline.orEmpty(),
-                    related = klineMessage?.related,
-                    relatedQuotes = store.relatedQuotes,
-                    industryKlines = store.industryKlines,
-                    minuteBars = store.minuteBars,
-                    minutePrevClose = store.minutePrevClose,
-                    showRelated = store.showRelated,
-                    canPop = store.klineCanPop,
-                    summary = summaryText,
-                    market = openedPick?.market ?: klineMessage?.quote?.market.orEmpty(),
-                    isIndex = openedIndex,
-                    indexBlurb = store.klineIndexBlurb,
-                    constituents = store.klineConstituents,
-                    onRelatedOpen = { name, code -> store.openRelated(name, code) },
-                    onAskFromChart = { store.askFromChart(it) },
-                    onAskAi = {
-                        store.askAboutOpened { error ->
-                            bridgeModule.toast(error)
-                        }
-                    },
-                    onCloseClick = { store.closeKlineLayer() },
-                    onDismiss = { store.dismissKlineSheet() },
-                    bottomInset = bottomInset,
-                    statusBarHeight = pagerData.statusBarHeight,
                 )
             }
             when (store.profilePane) {
@@ -437,7 +283,7 @@ internal class StockChatPage : BaseComposePager() {
                 )
                 ProfilePane.None -> Unit
             }
-            val overlayOpen = store.profilePane != ProfilePane.None || store.klineMessage != null
+            val overlayOpen = store.profilePane != ProfilePane.None
             if (!overlayOpen && (store.drawerVisible || keyboardHeight > 0f || store.chartAsk != null)) {
                 BackHandler {
                     when {

@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hfad.stockapplication.component.drawer.DrawerItem
 import com.hfad.stockapplication.data.chat.ChartAskContext
+import com.hfad.stockapplication.data.chat.ChartAskHandoff
 import com.hfad.stockapplication.data.chat.ChatMessage
 import com.hfad.stockapplication.data.chat.ChatRepository
 import com.hfad.stockapplication.data.chat.ChatSession
@@ -295,6 +296,11 @@ class ChatStore(
         closeKline()
     }
 
+    /** 详情页长按带回的选点；没有挂起则不动。 */
+    fun takePendingChartAsk() {
+        ChartAskHandoff.take()?.let { askFromChart(it) }
+    }
+
     fun clearChartAsk() {
         chartAsk = null
     }
@@ -334,13 +340,11 @@ class ChatStore(
         if (peers.isEmpty()) {
             return null
         }
-        val target = (source.targetName ?: source.quote?.name.orEmpty()).ifBlank { "目标股" }
-        val code = source.targetCode.orEmpty()
-        val named = if (code.length == 6) "$target（$code）" else target
+        val target = (source.targetName ?: source.quote?.name.orEmpty()).ifBlank { "它" }
         val list = peers.take(6).joinToString("、") { stock ->
-            if (stock.code.length == 6) "${stock.name}（${stock.code}）" else stock.name
+            stock.name.trim().ifBlank { stock.code }
         }
-        return "对比${named}与同行业这些股票的近期涨跌和基本面差异，不要编造名单外的代码：$list"
+        return "${target}跟同行业比怎么样？比如$list"
     }
 
     private fun sourceForQuoteLatest(): ChatMessage? {
@@ -1255,7 +1259,7 @@ class ChatStore(
     )
 
     companion object {
-        const val DEFAULT_TITLE = "股票问答"
+        const val DEFAULT_TITLE = "AI 投研助手"
         const val DEFAULT_DISPLAY_NAME = "北不选狙"
         const val LOADING_TEXT = "正在分析…"
         /** 带给模型的最近消息条数上限（含用户与助手）。 */

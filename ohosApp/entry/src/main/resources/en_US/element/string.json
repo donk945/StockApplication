@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "module description"
+      "value": "AI stock Q&A"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "description"
+      "value": "Stock Q&A"
     },
     {
       "name": "EntryAbility_label",
-      "value": "kuiklydemo"
+      "value": "股票问答"
     }
   ]
 }
