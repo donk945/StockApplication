@@ -27,6 +27,8 @@ class KRBridgeModule : KuiklyRenderBaseModule() {
                 NativeApi.plat.navigateBack(json())
                 Unit
             }
+            "debugMark" -> ""
+            "loadDebugMark" -> ""
             "currentTimestamp" -> Date.now().toString()
             "dateFormatter" -> dateFormatter(params)
             "localServeTime" -> {

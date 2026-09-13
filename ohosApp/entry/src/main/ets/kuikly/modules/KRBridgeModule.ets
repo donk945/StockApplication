@@ -88,6 +88,10 @@ export class KRBridgeModule extends KuiklyRenderBaseModule {
         this.setNightBars(params);
         break;
       }
+      case 'debugMark':
+      case 'loadDebugMark': {
+        return '';
+      }
       default:
         break;
     }

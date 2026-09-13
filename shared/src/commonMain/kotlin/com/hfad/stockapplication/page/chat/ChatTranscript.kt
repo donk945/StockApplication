@@ -3,16 +3,12 @@ package com.hfad.stockapplication.page.chat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import com.hfad.stockapplication.component.chart.ComparisonPairRow
 import com.hfad.stockapplication.component.chart.IndexBreadthRow
 import com.hfad.stockapplication.component.chart.QuoteSparkline
 import com.hfad.stockapplication.component.chart.TargetStockChip
 import com.hfad.stockapplication.component.theme.ChatComposeTheme
-import com.hfad.stockapplication.component.theme.chatMarkdownColors
-import com.hfad.stockapplication.component.theme.chatMarkdownTypography
+import com.hfad.stockapplication.component.theme.ChatMarkdownBody
 import com.hfad.stockapplication.data.chat.ChatMessage
 import com.hfad.stockapplication.data.chat.FollowUpPrompts
 import com.hfad.stockapplication.data.chat.KLineBar
@@ -57,9 +53,6 @@ import com.tencent.kuikly.compose.ui.geometry.Offset
 import com.tencent.kuikly.compose.ui.text.font.FontWeight
 import com.tencent.kuikly.compose.ui.unit.dp
 import com.tencent.kuikly.compose.ui.unit.sp
-import com.tencent.kuikly.core.datetime.DateTime
-import com.tencent.kuiklybase.markdown.compose.Markdown
-import com.tencent.kuiklybase.markdown.model.rememberMarkdownState
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -160,8 +153,11 @@ internal fun ChatTranscriptList(
                 "rows" to rows.size.toString(),
                 "parts" to rows.count { it is ChatRow.Part }.toString(),
                 "streamParts" to rows.count { it is ChatRow.Part && it.streaming }.toString(),
+                "parseParts" to rows.count { it is ChatRow.Part && !it.streaming }.toString(),
+                "cards" to rows.count { it is ChatRow.Cards }.toString(),
                 "sending" to sending.toString(),
             ),
+            runId = "send-crash",
         )
     }
     // #endregion
@@ -214,51 +210,7 @@ internal fun AssistantPartRow(
     pageViewWidth: Float,
 ) {
     val maxWidth = (pageViewWidth - 40f).dp
-    val markdownState = rememberMarkdownState()
-    var parsed by remember { mutableStateOf(false) }
-    val plain = RelatedStockParser.streamPlainText(text)
     val thinking = streaming && (text == ChatStore.LOADING_TEXT || text.isBlank())
-    // #region agent log
-    LaunchedEffect(streaming, thinking) {
-        AgentDebugLog.emit(
-            "A",
-            "AssistantPartRow",
-            "part-mode",
-            mapOf(
-                "streaming" to streaming.toString(),
-                "thinking" to thinking.toString(),
-                "parsed" to parsed.toString(),
-                "len" to text.length.toString(),
-                "stars" to text.contains("**").toString(),
-                "heading" to text.contains("#").toString(),
-                "first" to first.toString(),
-                "last" to last.toString(),
-            ),
-        )
-    }
-    // #endregion
-    LaunchedEffect(text, streaming, thinking) {
-        if (thinking || streaming) {
-            parsed = false
-            return@LaunchedEffect
-        }
-        val started = DateTime.currentTimestamp()
-        markdownState.parse(RelatedStockParser.streamMarkdown(text), false)
-        parsed = true
-        // #region agent log
-        AgentDebugLog.emit(
-            "B",
-            "AssistantPartRow",
-            "parse-done",
-            mapOf(
-                "len" to text.length.toString(),
-                "ms" to (DateTime.currentTimestamp() - started).toString(),
-                "stars" to text.contains("**").toString(),
-                "heading" to text.contains("#").toString(),
-            ),
-        )
-        // #endregion
-    }
     val shape = RoundedCornerShape(
         topStart = if (first) 12.dp else 0.dp,
         topEnd = if (first) 12.dp else 0.dp,
@@ -290,18 +242,10 @@ internal fun AssistantPartRow(
         ) {
             if (thinking) {
                 ThinkingIndicator()
-            } else if (!parsed) {
-                Text(
-                    text = plain.ifBlank { "正在分析…" },
-                    fontSize = 15.sp,
-                    color = ChatComposeTheme.title,
-                )
             } else {
-                Markdown(
-                    state = markdownState,
-                    colors = chatMarkdownColors(),
-                    typography = chatMarkdownTypography(),
-                    modifier = Modifier.fillMaxWidth(),
+                ChatMarkdownBody(
+                    text = text,
+                    streaming = streaming,
                 )
             }
         }

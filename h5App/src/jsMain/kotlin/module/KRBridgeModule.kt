@@ -34,9 +34,13 @@ class KRBridgeModule : KuiklyRenderBaseModule() {
                 Unit
             }
             "closePage" -> {
-                window.close()
+                if (window.history.length > 1) {
+                    window.history.back()
+                }
                 Unit
             }
+            "debugMark" -> ""
+            "loadDebugMark" -> ""
             "currentTimestamp" -> currentTimestamp()
             "dateFormatter" -> dateFormatter(params)
             "localServeTime" -> {

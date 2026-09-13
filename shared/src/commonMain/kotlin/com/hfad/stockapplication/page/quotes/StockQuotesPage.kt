@@ -2,6 +2,9 @@ package com.hfad.stockapplication.page.quotes
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.hfad.stockapplication.component.theme.ChatComposeTheme
 import com.hfad.stockapplication.component.theme.ProvideChatColors
 import com.hfad.stockapplication.data.chat.StockQuote
@@ -53,6 +56,7 @@ import kotlinx.coroutines.delay
 internal class StockQuotesPage : BaseComposePager() {
 
     private lateinit var store: QuotesStore
+    private var pageVisible by mutableStateOf(true)
 
     override fun willInit() {
         super.willInit()
@@ -68,6 +72,16 @@ internal class StockQuotesPage : BaseComposePager() {
         store.loadInitial(dark = theme.isDark(isNightMode()))
     }
 
+    override fun pageDidAppear() {
+        super.pageDidAppear()
+        pageVisible = true
+    }
+
+    override fun pageDidDisappear() {
+        pageVisible = false
+        super.pageDidDisappear()
+    }
+
     @Composable
     private fun QuotesScreen() {
         val bottomInset = systemBottomInset()
@@ -75,10 +89,15 @@ internal class StockQuotesPage : BaseComposePager() {
             LaunchedEffect(store.darkTheme) {
                 bridgeModule.setNightBars(store.darkTheme)
             }
-            LaunchedEffect(Unit) {
-                while (true) {
+            LaunchedEffect(pageVisible) {
+                if (!pageVisible) {
+                    return@LaunchedEffect
+                }
+                while (pageVisible) {
                     delay(5_000)
-                    store.refresh()
+                    if (pageVisible) {
+                        store.refresh()
+                    }
                 }
             }
             Column(

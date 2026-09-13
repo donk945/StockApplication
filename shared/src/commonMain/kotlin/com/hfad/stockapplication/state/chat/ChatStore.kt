@@ -25,6 +25,7 @@ import com.hfad.stockapplication.data.chat.TargetStockParser
 import com.hfad.stockapplication.data.chat.TencentMarketRepository
 import com.hfad.stockapplication.data.chat.UserSettingsRepository
 import com.hfad.stockapplication.data.chat.ThemeMode
+import com.hfad.stockapplication.debug.AgentDebugLog
 
 /**
  * 股票问答页的状态与业务规则（页面只读这些字段、只调这些方法）。
@@ -86,6 +87,8 @@ class ChatStore(
     var themeMode: ThemeMode by mutableStateOf(ThemeMode.System)
     /** 当前是否用深色配色。 */
     var darkTheme: Boolean by mutableStateOf(false)
+    /** 上次闪退前最后一步，启动时读出给调试用。 */
+    var lastDebugMark: String by mutableStateOf("")
 
     val usingCustomApiKey: Boolean
         get() = customApiKey.isNotBlank()
@@ -117,6 +120,7 @@ class ChatStore(
     private var promptQuotes: Map<String, StockQuote> = emptyMap()
     /** 流式中已发起过行情请求的代码，避免每个 delta 都打接口。 */
     private val streamQuoteAsked = mutableSetOf<String>()
+    private var streamMarked = false
 
     /** 页面 [created] 后调用：对齐序号、拉设置与历史，并恢复上次非空会话。 */
     fun loadInitial(systemNight: Boolean = false) {
@@ -298,10 +302,57 @@ class ChatStore(
 
     /** 详情页长按带回的选点；没有挂起则不动。 */
     fun takePendingChartAsk() {
-        ChartAskHandoff.take()?.let { askFromChart(it) }
+        val pending = ChartAskHandoff.take()
+        if (pending == null) {
+            // #region agent log
+            AgentDebugLog.emit(
+                "A",
+                "ChatStore.takePendingChartAsk",
+                "miss",
+                mapOf(
+                    "hasChart" to (chartAsk != null).toString(),
+                    "day" to (chartAsk?.bar?.day ?: ""),
+                ),
+                runId = "chart-ask",
+            )
+            // #endregion
+            return
+        }
+        // #region agent log
+        AgentDebugLog.emit(
+            "A",
+            "ChatStore.takePendingChartAsk",
+            "take",
+            mapOf(
+                "kind" to pending.kind.name,
+                "code" to pending.code,
+                "day" to pending.bar.day,
+                "close" to pending.bar.close,
+                "open" to pending.bar.open,
+                "high" to pending.bar.high,
+                "low" to pending.bar.low,
+            ),
+            runId = "chart-ask",
+        )
+        // #endregion
+        askFromChart(pending)
     }
 
-    fun clearChartAsk() {
+    fun clearChartAsk(reason: String = "unspecified") {
+        // #region agent log
+        AgentDebugLog.emit(
+            "A",
+            "ChatStore.clearChartAsk",
+            "clear",
+            mapOf(
+                "reason" to reason,
+                "had" to (chartAsk != null).toString(),
+                "day" to (chartAsk?.bar?.day ?: ""),
+                "close" to (chartAsk?.bar?.close ?: ""),
+            ),
+            runId = "chart-ask",
+        )
+        // #endregion
         chartAsk = null
     }
 
@@ -429,7 +480,7 @@ class ChatStore(
         resetCurrentSession()
         refreshHistories()
         closeKline()
-        clearChartAsk()
+        clearChartAsk("new-chat")
     }
 
     /** 点抽屉某条历史：先存当前，再把该会话消息装回列表。 */
@@ -444,7 +495,7 @@ class ChatStore(
         applySession(session)
         closeDrawer()
         closeKline()
-        clearChartAsk()
+        clearChartAsk("open-session")
     }
 
     fun deleteHistory(id: String) {
@@ -456,7 +507,7 @@ class ChatStore(
             abortAsk()
             resetCurrentSession()
             closeKline()
-            clearChartAsk()
+            clearChartAsk("delete-history")
         }
         refreshHistories()
     }
@@ -521,7 +572,7 @@ class ChatStore(
         settingsRepository.saveLastSessionId("")
         resetCurrentSession()
         closeKline()
-        clearChartAsk()
+        clearChartAsk("clear-all")
         refreshHistories()
     }
 
@@ -537,6 +588,10 @@ class ChatStore(
 
     fun persistOnExit() {
         persistCurrentIfNeeded()
+    }
+
+    fun markDebug(step: String) {
+        lastDebugMark = step
     }
 
     private fun effectiveApiKey(): String {
@@ -596,6 +651,8 @@ class ChatStore(
         if (isSending) {
             return
         }
+        markDebug("send-start")
+        streamMarked = false
         isSending = true
         lastThink = think
         promptQuotes = emptyMap()
@@ -628,16 +685,65 @@ class ChatStore(
             messages.add(ChatMessage(userId, fromUser = true, body = question))
         }
         messages.add(ChatMessage(assistantId, fromUser = false, body = LOADING_TEXT))
-        if (!titleLocked) {
-            sessionTitle = SessionTitles.fromQuestion(question, DEFAULT_TITLE)
-        }
+        markDebug("after-insert")
         syncMessagesEmpty()
-        persistCurrentIfNeeded()
-        val chartSnapshot = chartAsk?.toModelSnapshot().orEmpty()
+        try {
+            persistCurrentIfNeeded()
+            markDebug("after-persist")
+        } catch (error: Throwable) {
+            // #region agent log
+            AgentDebugLog.emit(
+                "R",
+                "ChatStore.sendQuestion",
+                "persist-throw",
+                mapOf(
+                    "type" to error::class.simpleName.orEmpty(),
+                    "msg" to (error.message ?: ""),
+                ),
+                runId = "send-crash",
+            )
+            // #endregion
+        }
+        // #region agent log
+        AgentDebugLog.emit(
+            "C",
+            "ChatStore.sendQuestion",
+            "after-insert",
+            mapOf(
+                "qLen" to question.length.toString(),
+                "msg" to messages.size.toString(),
+                "empty" to messagesEmpty.toString(),
+                "hasChart" to (chartAsk != null).toString(),
+            ),
+            runId = "send-crash",
+        )
+        // #endregion
+        val chartAskAtSend = chartAsk
+        val chartSnapshot = chartAskAtSend?.toModelSnapshot().orEmpty()
         val askModel: (String) -> Unit = { liveSnapshot ->
             val marketContext = listOf(chartSnapshot, liveSnapshot)
                 .filter { it.isNotBlank() }
                 .joinToString("\n\n")
+            // #region agent log
+            AgentDebugLog.emit(
+                "B",
+                "ChatStore.sendQuestion",
+                "ask-model-ctx",
+                mapOf(
+                    "chartLen" to chartSnapshot.length.toString(),
+                    "liveLen" to liveSnapshot.length.toString(),
+                    "ctxLen" to marketContext.length.toString(),
+                    "hasDaily" to marketContext.contains("【日K选点】").toString(),
+                    "hasMinute" to marketContext.contains("【分时选点】").toString(),
+                    "hasLive" to marketContext.contains("【行情快照】").toString(),
+                    "day" to (chartAskAtSend?.bar?.day ?: ""),
+                    "close" to (chartAskAtSend?.bar?.close ?: ""),
+                    "ctxHead" to marketContext.take(90).replace("\n", "|"),
+                    "skipLive" to (chartSnapshot.isNotBlank() && liveSnapshot.isBlank()).toString(),
+                ),
+                runId = "post-fix",
+            )
+            // #endregion
             aiRepository.askStockContext(
                 question = question,
                 history = history,
@@ -668,6 +774,7 @@ class ChatStore(
                                 )
                             }
                             persistCurrentIfNeeded()
+                            markDebug("idle")
                             onError(hint)
                         }
                     )
@@ -677,26 +784,56 @@ class ChatStore(
             )
         }
         val targets = resolvePromptTargets(question)
+        markDebug("after-targets-${targets.size}")
         chartAsk = null
+        markDebug("after-clear-card")
+        // #region agent log
+        AgentDebugLog.emit(
+            "A",
+            "ChatStore.sendQuestion",
+            "targets",
+            mapOf(
+                "n" to targets.size.toString(),
+                "first" to (targets.firstOrNull()?.code ?: ""),
+                "snapLen" to chartSnapshot.length.toString(),
+                "kind" to (chartAskAtSend?.kind?.name ?: ""),
+                "day" to (chartAskAtSend?.bar?.day ?: ""),
+                "close" to (chartAskAtSend?.bar?.close ?: ""),
+                "hadChart" to (chartAskAtSend != null).toString(),
+            ),
+            runId = "chart-ask",
+        )
+        // #endregion
         if (targets.isEmpty()) {
+            markDebug("ask-no-target")
             askModel("")
             return
         }
         val items = targets.map { it.symbol to it.name }
+        markDebug("fetch-quotes")
         marketRepository.fetchQuotes(items) { quotes ->
             if (seq != askSeq) {
                 return@fetchQuotes
             }
+            markDebug("quotes-back-${quotes.size}")
             quotes.forEach { quote ->
                 applyLiveQuote(quote.code, quote)
             }
             promptQuotes = quotes.associateBy { it.code }
+            markDebug("seed-cards")
             seedPromptTargets(assistantId, targets, quotes)
             val byCode = quotes.associateBy { it.code }
             val snapshots = targets.mapNotNull { item ->
                 (byCode[item.code] ?: item.cached)?.toModelSnapshot()
             }
-            askModel(snapshots.joinToString("\n\n"))
+            markDebug("ask-model")
+            // 有日K/分时选点时不把最新【行情快照】拼进模型，避免和选中日混在一起。
+            val liveForModel = if (chartSnapshot.isNotBlank()) {
+                ""
+            } else {
+                snapshots.joinToString("\n\n")
+            }
+            askModel(liveForModel)
         }
     }
 
@@ -808,6 +945,7 @@ class ChatStore(
      * 流式结束后立刻落正文；缺的行情后台补，不再挡住 Markdown 和小标题。
      */
     private fun finishAsk(seq: Int, assistantId: String, ask: StockAskResult) {
+        markDebug("finish-ask")
         val parsed = TargetStockParser.parseAll(ask.markdown)
         val picks = TargetStockParser.parseRelatedPicks(ask.markdown)
         val index = messages.indexOfFirst { it.id == assistantId }
@@ -819,6 +957,7 @@ class ChatStore(
         }
         isSending = false
         applyAskResult(assistantId, ask, ready)
+        markDebug("idle")
         if (missing.isEmpty()) {
             return
         }
@@ -1117,9 +1256,29 @@ class ChatStore(
         if (index < 0) {
             return
         }
+        if (!streamMarked) {
+            streamMarked = true
+            markDebug("first-stream-${raw.length}")
+        }
         val current = messages[index]
         val displayed = RelatedStockParser.displayMarkdown(raw)
         val nextBody = displayed.ifBlank { LOADING_TEXT }
+        // #region agent log
+        if (nextBody.length + 8 < current.body.length) {
+            AgentDebugLog.emit(
+                "B",
+                "ChatStore.applyAssistantStream",
+                "body-shrink",
+                mapOf(
+                    "rawLen" to raw.length.toString(),
+                    "dispLen" to displayed.length.toString(),
+                    "prevLen" to current.body.length.toString(),
+                    "nextLen" to nextBody.length.toString(),
+                ),
+                runId = "md-flicker",
+            )
+        }
+        // #endregion
         val modelTargets = TargetStockParser.parseAll(raw)
         val nextTargets = modelTargets.ifEmpty { current.targets }
         val modelPicks = TargetStockParser.parseRelatedPicks(raw)

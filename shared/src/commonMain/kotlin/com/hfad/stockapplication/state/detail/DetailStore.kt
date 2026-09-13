@@ -11,6 +11,7 @@ import com.hfad.stockapplication.data.chat.RelatedStocks
 import com.hfad.stockapplication.data.chat.StockAiRepository
 import com.hfad.stockapplication.data.chat.StockQuote
 import com.hfad.stockapplication.data.chat.TencentMarketRepository
+import com.hfad.stockapplication.debug.AgentDebugLog
 import com.hfad.stockapplication.infra.DetailParams
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 
@@ -38,6 +39,7 @@ class DetailStore(
     var aiText: String by mutableStateOf("")
     var aiSending: Boolean by mutableStateOf(false)
     var darkTheme: Boolean by mutableStateOf(false)
+    private var released = false
 
     val symbol: String
         get() = "$market$code"
@@ -78,6 +80,14 @@ class DetailStore(
         refreshMarket(includeKline = false)
     }
 
+    fun release() {
+        released = true
+        if (aiSending) {
+            aiRepository.cancel()
+            aiSending = false
+        }
+    }
+
     fun interpretTrend(onError: (String) -> Unit) {
         askAi(
             question = "结合最新行情，${label()}现在怎么走？先给一句话结论，再写驱动因素和主要风险。明确说明不构成投资建议。",
@@ -114,20 +124,62 @@ class DetailStore(
         aiSending = true
         aiText = ""
         val context = listOf(snapshot, extraContext).filter { it.isNotBlank() }.joinToString("\n\n")
+        var deltaCount = 0
         aiRepository.askStockContext(
             question = question,
             history = emptyList(),
             onDelta = { delta ->
-                aiText += delta
+                if (!released) {
+                    val before = aiText.length
+                    val looksLikeFullSnapshot = before > 0 && delta.startsWith(aiText)
+                    aiText = delta
+                    deltaCount += 1
+                    // #region agent log
+                    if (deltaCount <= 4 || deltaCount % 12 == 0) {
+                        AgentDebugLog.emit(
+                            "A",
+                            "DetailStore.askAi",
+                            "delta",
+                            mapOf(
+                                "n" to deltaCount.toString(),
+                                "deltaLen" to delta.length.toString(),
+                                "before" to before.toString(),
+                                "after" to aiText.length.toString(),
+                                "snapshot" to looksLikeFullSnapshot.toString(),
+                                "assigned" to (aiText.length == delta.length).toString(),
+                                "hash" to delta.contains("#").toString(),
+                                "stars" to delta.contains("**").toString(),
+                            ),
+                            runId = "post-fix",
+                        )
+                    }
+                    // #endregion
+                }
             },
             onResult = { result ->
-                aiSending = false
-                result.onSuccess { ask ->
-                    if (ask.markdown.isNotBlank()) {
-                        aiText = ask.markdown
+                if (!released) {
+                    aiSending = false
+                    result.onSuccess { ask ->
+                        // #region agent log
+                        AgentDebugLog.emit(
+                            "A",
+                            "DetailStore.askAi",
+                            "done",
+                            mapOf(
+                                "n" to deltaCount.toString(),
+                                "streamLen" to aiText.length.toString(),
+                                "finalLen" to ask.markdown.length.toString(),
+                                "replaced" to (ask.markdown.isNotBlank()).toString(),
+                            ),
+                            runId = "post-fix",
+                        )
+                        // #endregion
+                        if (ask.markdown.isNotBlank()) {
+                            aiText = ask.markdown
+                        }
+                    }.onFailure { error ->
+                        onError(error.message ?: "解读失败")
                     }
-                }.onFailure { error ->
-                    onError(error.message ?: "解读失败")
                 }
             },
             marketContext = context,

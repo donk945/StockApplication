@@ -1,7 +1,9 @@
 package com.hfad.stockapplication.component.chart
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import com.hfad.stockapplication.component.theme.ChatComposeTheme
+import com.hfad.stockapplication.debug.AgentDebugLog
 import com.hfad.stockapplication.data.chat.ChartAskContext
 import com.tencent.kuikly.compose.foundation.background
 import com.tencent.kuikly.compose.foundation.border
@@ -33,6 +35,22 @@ fun ChartAskCard(
     modifier: Modifier = Modifier,
 ) {
     val bar = context.bar
+    // #region agent log
+    LaunchedEffect(context.code, bar.day, context.kind) {
+        AgentDebugLog.emit(
+            "G",
+            "ChartAskCard",
+            "show",
+            mapOf(
+                "kind" to context.kind.name,
+                "code" to context.code,
+                "day" to bar.day,
+                "close" to bar.close,
+            ),
+            runId = "chart-ask",
+        )
+    }
+    // #endregion
     val open = bar.open.toDoubleOrNull()
     val close = bar.close.toDoubleOrNull()
     val baseline = context.baseline.toDoubleOrNull() ?: open

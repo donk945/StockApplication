@@ -72,9 +72,6 @@ internal class StockChatPage : BaseComposePager() {
             builtinApiKey = apiKey,
         )
         store.loadInitial(systemNight = isNightMode())
-        // #region agent log
-        AgentDebugLog.sink = { json -> bridgeModule.log(json) }
-        // #endregion
         if (!store.apiKeyReady) {
             bridgeModule.toast("未配置 API Key，可在设置里填写")
         }
@@ -117,7 +114,7 @@ internal class StockChatPage : BaseComposePager() {
                 Spacer(modifier = Modifier.height(pagerData.statusBarHeight.dp))
                 ChatTitleBar(
                     title = store.sessionTitle,
-                    showTitle = true,
+                    showTitle = store.sessionTitle != ChatStore.DEFAULT_TITLE,
                     onMenuClick = { store.openDrawer() },
                     onNewChat = { store.startNewChat() },
                 )
@@ -133,10 +130,24 @@ internal class StockChatPage : BaseComposePager() {
                         } else {
                             null
                         }
-                        val chatRows = if (store.messagesEmpty) {
-                            emptyList()
-                        } else {
-                            buildChatRows(store.messages, streamingId)
+                        val lastAssistant = store.messages.lastOrNull { !it.fromUser }
+                        val chatRows = remember(
+                            store.messages.size,
+                            store.messagesEmpty,
+                            streamingId,
+                            lastAssistant?.id,
+                            lastAssistant?.body,
+                            lastAssistant?.failed,
+                            lastAssistant?.targetQuotes?.size,
+                            lastAssistant?.targetKlines?.size,
+                            lastAssistant?.relatedPicks?.size,
+                            lastAssistant?.related != null,
+                        ) {
+                            if (store.messagesEmpty) {
+                                emptyList()
+                            } else {
+                                buildChatRows(store.messages, streamingId)
+                            }
                         }
                         ChatTranscriptList(
                             rows = chatRows,
@@ -205,15 +216,33 @@ internal class StockChatPage : BaseComposePager() {
                             bridgeModule.toast("先问一只具体股票，等回复里出现关联股后再对比")
                             return@ChatComposer
                         }
-                        store.clearChartAsk()
+                        store.clearChartAsk("compare-peers")
                         store.sendQuestion(question) { error ->
                             bridgeModule.toast(error)
                         }
                     },
-                    onClearChartAsk = { store.clearChartAsk() },
+                    onClearChartAsk = { store.clearChartAsk("card-x") },
                     onSend = {
+                        store.markDebug("tap-send")
+                        // #region agent log
+                        AgentDebugLog.emit(
+                            "D",
+                            "ChatComposer.onSend",
+                            "tap",
+                            mapOf(
+                                "kb" to keyboardHeight.toString(),
+                                "empty" to store.messagesEmpty.toString(),
+                                "sending" to store.isSending.toString(),
+                                "hasChart" to (store.chartAsk != null).toString(),
+                                "day" to (store.chartAsk?.bar?.day ?: ""),
+                                "close" to (store.chartAsk?.bar?.close ?: ""),
+                            ),
+                            runId = "post-fix",
+                        )
+                        // #endregion
                         keyboardHeight = 0f
                         bridgeModule.closeKeyboard()
+                        store.markDebug("after-keyboard")
                         sendDraft()
                     },
                     onStop = { store.stopSending() },
@@ -292,7 +321,7 @@ internal class StockChatPage : BaseComposePager() {
                             bridgeModule.closeKeyboard()
                             keyboardHeight = 0f
                         }
-                        store.chartAsk != null -> store.clearChartAsk()
+                        store.chartAsk != null -> store.clearChartAsk("back-handler")
                     }
                 }
             }
@@ -304,9 +333,48 @@ internal class StockChatPage : BaseComposePager() {
     }
 
     private fun sendDraft() {
+        // #region agent log
+        AgentDebugLog.emit(
+            "A",
+            "StockChatPage.sendDraft",
+            "enter",
+            mapOf(
+                "empty" to store.messagesEmpty.toString(),
+                "sending" to store.isSending.toString(),
+                "draftLen" to store.draft.length.toString(),
+                "msg" to store.messages.size.toString(),
+                "hasChart" to (store.chartAsk != null).toString(),
+                "day" to (store.chartAsk?.bar?.day ?: ""),
+            ),
+            runId = "post-fix",
+        )
+        // #endregion
         val text = store.consumeDraftForSend() ?: return
-        store.sendQuestion(text) { error ->
-            bridgeModule.toast(error)
+        store.markDebug("draft-consumed")
+        try {
+            store.sendQuestion(text) { error ->
+                bridgeModule.toast(error)
+            }
+            // #region agent log
+            AgentDebugLog.emit(
+                "D",
+                "StockChatPage.sendDraft",
+                "asked",
+                mapOf("qLen" to text.length.toString(), "msg" to store.messages.size.toString()),
+                runId = "post-fix",
+            )
+            // #endregion
+        } catch (error: Throwable) {
+            // #region agent log
+            AgentDebugLog.emit(
+                "E",
+                "StockChatPage.sendDraft",
+                "throw",
+                mapOf("type" to error::class.simpleName.orEmpty(), "msg" to (error.message ?: "")),
+                runId = "post-fix",
+            )
+            // #endregion
+            throw error
         }
     }
 

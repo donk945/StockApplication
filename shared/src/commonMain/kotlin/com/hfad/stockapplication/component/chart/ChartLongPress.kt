@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import com.hfad.stockapplication.component.theme.ChatComposeTheme
+import com.hfad.stockapplication.debug.AgentDebugLog
 import com.tencent.kuikly.compose.animation.core.Animatable
 import com.tencent.kuikly.compose.animation.core.AnimationEndReason
 import com.tencent.kuikly.compose.animation.core.LinearEasing
@@ -83,6 +84,19 @@ internal fun rememberChartLongPress(
         )
         if (result.endReason == AnimationEndReason.Finished && state.center == point) {
             state.markFilled()
+            // #region agent log
+            AgentDebugLog.emit(
+                "F",
+                "ChartLongPress",
+                "filled",
+                mapOf(
+                    "x" to point.x.toInt().toString(),
+                    "y" to point.y.toInt().toString(),
+                    "w" to state.width.toInt().toString(),
+                ),
+                runId = "chart-ask",
+            )
+            // #endregion
             onFilledLatest.value(point.x, point.y, state.width)
         }
     }

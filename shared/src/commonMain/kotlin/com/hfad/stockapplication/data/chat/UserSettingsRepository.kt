@@ -40,11 +40,20 @@ class UserSettingsRepository(
         sp.setString(KEY_THEME_MODE, mode.storage)
     }
 
+    fun saveDebugMark(value: String) {
+        sp.setString(KEY_DEBUG_MARK, value)
+    }
+
+    fun loadDebugMark(): String {
+        return sp.getString(KEY_DEBUG_MARK).trim()
+    }
+
     companion object {
         const val KEY_DISPLAY_NAME = "user_display_name_v1"
         const val KEY_CUSTOM_API_KEY = "user_api_key_v1"
         const val KEY_LAST_SESSION_ID = "user_last_session_id_v1"
         const val KEY_THEME_MODE = "user_theme_mode_v1"
+        const val KEY_DEBUG_MARK = "debug_33e722_last"
     }
 }
 

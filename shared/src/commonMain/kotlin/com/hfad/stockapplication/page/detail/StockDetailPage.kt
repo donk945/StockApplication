@@ -11,13 +11,13 @@ import com.hfad.stockapplication.component.chart.StockRelatedSection
 import com.hfad.stockapplication.component.chart.TargetStockChip
 import com.hfad.stockapplication.component.theme.ChatComposeTheme
 import com.hfad.stockapplication.component.theme.ProvideChatColors
-import com.hfad.stockapplication.component.theme.chatMarkdownColors
-import com.hfad.stockapplication.component.theme.chatMarkdownTypography
+import com.hfad.stockapplication.component.theme.ChatMarkdownBody
 import com.hfad.stockapplication.data.chat.ChartAskContext
 import com.hfad.stockapplication.data.chat.ChartAskHandoff
 import com.hfad.stockapplication.data.chat.DeepSeekChatRepository
 import com.hfad.stockapplication.data.chat.TencentMarketRepository
 import com.hfad.stockapplication.data.chat.UserSettingsRepository
+import com.hfad.stockapplication.debug.AgentDebugLog
 import com.hfad.stockapplication.infra.AppPages
 import com.hfad.stockapplication.infra.BaseComposePager
 import com.hfad.stockapplication.infra.SseModule
@@ -55,8 +55,6 @@ import com.tencent.kuikly.compose.ui.unit.sp
 import com.tencent.kuikly.core.annotations.Page
 import com.tencent.kuikly.core.module.NetworkModule
 import com.tencent.kuikly.core.module.SharedPreferencesModule
-import com.tencent.kuiklybase.markdown.compose.Markdown
-import com.tencent.kuiklybase.markdown.model.rememberMarkdownState
 import kotlinx.coroutines.delay
 
 /**
@@ -68,6 +66,7 @@ import kotlinx.coroutines.delay
 internal class StockDetailPage : BaseComposePager() {
 
     private lateinit var store: DetailStore
+    private var pageVisible by mutableStateOf(true)
 
     override fun willInit() {
         super.willInit()
@@ -88,14 +87,45 @@ internal class StockDetailPage : BaseComposePager() {
             aiRepository = DeepSeekChatRepository(network, sse, apiKey),
         )
         store.loadFromParams(pagerData.params, dark = theme.isDark(isNightMode()))
+        // #region agent log
+        AgentDebugLog.emit(
+            "D",
+            "StockDetailPage.created",
+            "ready",
+            mapOf("code" to store.code),
+            runId = "post-fix",
+        )
+        // #endregion
+    }
+
+    override fun pageWillDestroy() {
+        if (::store.isInitialized) {
+            store.release()
+        }
+        super.pageWillDestroy()
     }
 
     override fun pageDidAppear() {
         super.pageDidAppear()
+        pageVisible = true
         // 关联股再开一层详情时：下层页出现后继续关，直到回到问答。
         if (ChartAskHandoff.peek() != null) {
+            // #region agent log
+            AgentDebugLog.emit(
+                "F",
+                "StockDetailPage.pageDidAppear",
+                "close-stacked",
+                mapOf("code" to store.code),
+                runId = "chart-ask",
+            )
+            // #endregion
             closeAppPage()
         }
+    }
+
+    override fun pageDidDisappear() {
+        pageVisible = false
+        super.pageDidDisappear()
     }
 
     @Composable
@@ -110,12 +140,16 @@ internal class StockDetailPage : BaseComposePager() {
             LaunchedEffect(store.code) {
                 selectedIndex = null
                 selectedMinuteIndex = null
-                if (store.code.length != 6) {
+            }
+            LaunchedEffect(store.code, pageVisible) {
+                if (!pageVisible || store.code.length != 6) {
                     return@LaunchedEffect
                 }
-                while (true) {
+                while (pageVisible) {
                     delay(3_000)
-                    store.refreshLive()
+                    if (pageVisible) {
+                        store.refreshLive()
+                    }
                 }
             }
             Column(
@@ -228,7 +262,10 @@ internal class StockDetailPage : BaseComposePager() {
                             Spacer(modifier = Modifier.height(16.dp))
                             SectionTitle(if (store.aiSending) "AI 解读中" else "AI 解读")
                             Spacer(modifier = Modifier.height(8.dp))
-                            AiMarkdownBody(text = store.aiText.ifBlank { "正在分析…" })
+                            AiMarkdownBody(
+                                text = store.aiText.ifBlank { "正在分析…" },
+                                streaming = store.aiSending,
+                            )
                         }
                     }
                     if (store.isIndex) {
@@ -289,6 +326,21 @@ internal class StockDetailPage : BaseComposePager() {
     }
 
     private fun returnWithChartAsk(context: ChartAskContext) {
+        // #region agent log
+        AgentDebugLog.emit(
+            "F",
+            "StockDetailPage.returnWithChartAsk",
+            "offer-close",
+            mapOf(
+                "kind" to context.kind.name,
+                "code" to context.code,
+                "day" to context.bar.day,
+                "close" to context.bar.close,
+                "open" to context.bar.open,
+            ),
+            runId = "chart-ask",
+        )
+        // #endregion
         ChartAskHandoff.offer(context)
         closeAppPage()
     }
@@ -420,13 +472,7 @@ private fun AskSmallChip(
 }
 
 @Composable
-private fun AiMarkdownBody(text: String) {
-    val markdownState = rememberMarkdownState()
-    var parsed by remember { mutableStateOf(false) }
-    LaunchedEffect(text) {
-        markdownState.parse(text, false)
-        parsed = true
-    }
+private fun AiMarkdownBody(text: String, streaming: Boolean) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -434,15 +480,10 @@ private fun AiMarkdownBody(text: String) {
             .background(ChatComposeTheme.contentBg)
             .padding(12.dp),
     ) {
-        if (!parsed) {
-            Text(text = text, fontSize = 13.sp, color = ChatComposeTheme.title)
-        } else {
-            Markdown(
-                state = markdownState,
-                colors = chatMarkdownColors(),
-                typography = chatMarkdownTypography(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        ChatMarkdownBody(
+            text = text,
+            streaming = streaming,
+            fallbackFontSize = 13.sp,
+        )
     }
 }

@@ -155,6 +155,26 @@ object RelatedStockParser {
     }
 
     /**
+     * 流式时不要每个字都 parse：换行或累计够长再解析，避免卡死，又能尽早出标题/加粗。
+     */
+    fun streamParseReady(
+        length: Int,
+        lastParsedLen: Int,
+        streaming: Boolean,
+        endsWithBreak: Boolean,
+        hasBreak: Boolean,
+    ): Boolean {
+        if (!streaming) {
+            return true
+        }
+        if (length < lastParsedLen) {
+            return true
+        }
+        val grew = length - lastParsedLen
+        return endsWithBreak || grew >= 40 || (hasBreak && grew >= 16)
+    }
+
+    /**
      * 把助手正文拆成多段，供 LazyColumn 每段一个 item。
      * Kuikly 不能在高于视口的单个 item 内滚动；一段过长就会白屏后卡在尾部、无法上翻。
      */

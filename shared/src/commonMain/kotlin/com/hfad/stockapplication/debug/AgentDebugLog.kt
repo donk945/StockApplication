@@ -1,10 +1,14 @@
 package com.hfad.stockapplication.debug
 
-import com.tencent.kuikly.core.datetime.DateTime
-import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
-
+/**
+ * 调试埋点入口。正式路径保持空实现，避免流式热路径拼 JSON、打桥、写盘。
+ */
 internal object AgentDebugLog {
     var sink: ((String) -> Unit)? = null
+    var mark: ((String) -> Unit)? = null
+
+    fun breadcrumb(step: String) {
+    }
 
     fun emit(
         hypothesisId: String,
@@ -13,18 +17,5 @@ internal object AgentDebugLog {
         data: Map<String, String> = emptyMap(),
         runId: String = "pre-fix",
     ) {
-        val payload = JSONObject()
-        payload.put("sessionId", "33e722")
-        payload.put("runId", runId)
-        payload.put("hypothesisId", hypothesisId)
-        payload.put("location", location)
-        payload.put("message", message)
-        payload.put("timestamp", DateTime.currentTimestamp())
-        val dataObj = JSONObject()
-        data.forEach { (key, value) ->
-            dataObj.put(key, value)
-        }
-        payload.put("data", dataObj)
-        sink?.invoke(payload.toString())
     }
 }

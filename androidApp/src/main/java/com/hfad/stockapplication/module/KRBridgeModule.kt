@@ -11,8 +11,6 @@ import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
 import com.hfad.stockapplication.KRApplication
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -80,6 +78,14 @@ class KRBridgeModule : KuiklyRenderBaseModule() {
                 closeKeyboard()
             }
 
+            "debugMark" -> {
+                debugMark(params)
+            }
+
+            "loadDebugMark" -> {
+                loadDebugMark()
+            }
+
             else -> callback?.invoke(
                 mapOf(
                     "code" to -1,
@@ -99,42 +105,7 @@ class KRBridgeModule : KuiklyRenderBaseModule() {
         if (params == null) {
             return
         }
-
-        val paramJSON = JSONObject(params)
-        val content = paramJSON.optString("content")
-        Log.i("KuiklyRender", content)
-        if (content.contains("\"sessionId\":\"33e722\"")) {
-            ingestAgentDebug(content)
-        }
-    }
-
-    private fun ingestAgentDebug(body: String) {
-        // #region agent log
-        Thread {
-            val payload = body.toByteArray(Charsets.UTF_8)
-            val endpoints = listOf(
-                "http://127.0.0.1:7803/ingest/557ad929-3442-4ddd-b189-c1033d755676",
-                "http://10.0.2.2:7803/ingest/557ad929-3442-4ddd-b189-c1033d755676",
-                "http://192.168.1.3:7803/ingest/557ad929-3442-4ddd-b189-c1033d755676",
-            )
-            for (endpoint in endpoints) {
-                try {
-                    val conn = URL(endpoint).openConnection() as HttpURLConnection
-                    conn.requestMethod = "POST"
-                    conn.doOutput = true
-                    conn.connectTimeout = 800
-                    conn.readTimeout = 800
-                    conn.setRequestProperty("Content-Type", "application/json")
-                    conn.setRequestProperty("X-Debug-Session-Id", "33e722")
-                    conn.outputStream.use { it.write(payload) }
-                    conn.inputStream.close()
-                    conn.disconnect()
-                    break
-                } catch (_: Exception) {
-                }
-            }
-        }.start()
-        // #endregion
+        Log.i("KuiklyRender", JSONObject(params).optString("content"))
     }
 
     private fun toast(params: String?) {
@@ -154,11 +125,21 @@ class KRBridgeModule : KuiklyRenderBaseModule() {
         (activity as? com.hfad.stockapplication.KuiklyRenderActivity)?.applyNightBars(night)
     }
 
+    private fun debugMark(params: String?) {
+    }
+
+    private fun loadDebugMark(): String {
+        return ""
+    }
+
     private fun closeKeyboard() {
-        val act = activity ?: return
-        val view = act.currentFocus ?: act.window?.decorView ?: return
-        val imm = act.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        imm?.hideSoftInputFromWindow(view.windowToken, 0)
+        try {
+            val act = activity ?: return
+            val view = act.currentFocus ?: act.window?.decorView ?: return
+            val imm = act.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.hideSoftInputFromWindow(view.windowToken, 0)
+        } catch (_: Throwable) {
+        }
     }
 
     private fun copyToPasteboard(params: String?) {

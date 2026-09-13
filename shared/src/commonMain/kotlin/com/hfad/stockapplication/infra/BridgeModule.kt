@@ -38,6 +38,13 @@ internal class BridgeModule : Module() {
         callNativeMethod(COPY, args, null)
     }
 
+    fun debugMark(step: String) {
+    }
+
+    fun loadDebugMark(): String {
+        return ""
+    }
+
     private fun callNativeMethod(methodName: String, data: JSONObject?, callbackFn: CallbackFn?) {
         toNative(false, methodName, data?.toString(), callbackFn, false)
     }

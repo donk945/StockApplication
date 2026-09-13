@@ -1,7 +1,6 @@
 package com.hfad.stockapplication.adapter
 
 import android.util.Log
-import com.hfad.stockapplication.BuildConfig
 import com.tencent.kuikly.core.render.android.adapter.IKRUncaughtExceptionHandlerAdapter
 
 object KRUncaughtExceptionHandlerAdapter : IKRUncaughtExceptionHandlerAdapter {
@@ -10,8 +9,7 @@ object KRUncaughtExceptionHandlerAdapter : IKRUncaughtExceptionHandlerAdapter {
 
     override fun uncaughtException(throwable: Throwable) {
         Log.e(TAG, "KR error: ${throwable.stackTraceToString()}")
-        if (BuildConfig.DEBUG) {
-            throw throwable
-        }
+        // 不再二次抛出：Kuikly 会把可恢复的渲染/解析错误送到这里，
+        // 再 throw 会把整个进程打死。
     }
 }

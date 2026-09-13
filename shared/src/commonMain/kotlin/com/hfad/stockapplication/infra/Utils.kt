@@ -24,6 +24,17 @@ internal object Utils : BaseObject() {
         bridgeModule(BridgeManager.currentPageId).log(content)
     }
 
+    fun tryLogToNative(content: String) {
+        try {
+            val id = BridgeManager.currentPageId
+            if (id.isBlank()) {
+                return
+            }
+            PagerManager.getPager(id).acquireModule<BridgeModule>(BridgeModule.MODULE_NAME).log(content)
+        } catch (_: Throwable) {
+        }
+    }
+
     fun convertToPriceStr(price: Long): String {
         return (price / 100f).toString()
     }

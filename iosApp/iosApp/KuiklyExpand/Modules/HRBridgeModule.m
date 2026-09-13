@@ -132,4 +132,12 @@
     }
 }
 
+- (id)debugMark:(NSDictionary *)args {
+    return @"";
+}
+
+- (id)loadDebugMark:(NSDictionary *)args {
+    return @"";
+}
+
 @end

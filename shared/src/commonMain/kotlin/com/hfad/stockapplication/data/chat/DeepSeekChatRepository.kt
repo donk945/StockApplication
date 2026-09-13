@@ -1,5 +1,6 @@
 package com.hfad.stockapplication.data.chat
 
+import com.hfad.stockapplication.debug.AgentDebugLog
 import com.hfad.stockapplication.infra.SseModule
 import com.tencent.kuikly.core.module.NetworkModule
 import com.tencent.kuikly.core.nvi.serialization.json.JSONArray
@@ -185,6 +186,23 @@ class DeepSeekChatRepository(
         } else {
             "$question\n\n$marketContext"
         }
+        // #region agent log
+        AgentDebugLog.emit(
+            "B",
+            "DeepSeekChatRepository.buildBody",
+            "user-content",
+            mapOf(
+                "qLen" to question.length.toString(),
+                "ctxLen" to marketContext.length.toString(),
+                "userLen" to userContent.length.toString(),
+                "hasDaily" to userContent.contains("【日K选点】").toString(),
+                "hasMinute" to userContent.contains("【分时选点】").toString(),
+                "hasLive" to userContent.contains("【行情快照】").toString(),
+                "ctxHead" to marketContext.take(90).replace("\n", "|"),
+            ),
+            runId = "post-fix",
+        )
+        // #endregion
         messages.put(
             JSONObject()
                 .put("role", "user")
@@ -256,7 +274,9 @@ class DeepSeekChatRepository(
 关联三段每组最多8个，每条必须是「- 名称（6位代码）」，不要解释。只在问到具体正股时才写这三段；指数和纯概念问不要写。
 正股只列沪深A股上市公司（代码以6/0/3开头的6位数字）；不要 ETF、基金、板块名、未上市公司或编造的代码。不确定该股是否在市，就不要写进去。
 多轮对话时：只有本轮仍在讨论那只已确定的目标股或指数，才继续带上对应段落；换了话题就不要再带。
-若本轮用户消息末尾附有【行情快照】或【日K选点】【分时选点】，其中的现价、涨跌、成交额、时间以该快照为准；没有快照时不要编造精确现价。
+若本轮用户消息末尾附有【日K选点】或【分时选点】，价格、涨跌、成交、时间只以该选点为准，不要混用最新现价或其他交易日。
+若只有【行情快照】没有选点，现价、涨跌、成交额、时间以该快照为准。
+没有上述快照时不要编造精确现价。
 
 【投资场景】
 用户问买卖、走势、风险、信号时：第一段给一句话结论，随后分「驱动因素」「主要风险」两小节。必须写明「不构成投资建议」，不要给仓位、点位保证或必涨承诺。"""

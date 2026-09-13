@@ -19,7 +19,7 @@ data class ChartAskContext(
             Kind.Minute -> "【分时选点】"
         }
         return buildString {
-            appendLine("${prefix}回答该时间点价格、涨跌、成交时必须以本快照为准，不要编造。")
+            appendLine("${prefix}本轮只依据该选点的价格、涨跌、成交与时间作答，不要使用最新现价或其他交易日，不要编造。")
             appendLine("${name.ifBlank { "目标股" }}（$code）")
             appendLine("时间 ${bar.day}")
             append("开 ${bar.open}  高 ${bar.high}  低 ${bar.low}  收 ${bar.close}")
